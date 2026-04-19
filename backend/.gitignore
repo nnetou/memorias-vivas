@@ -1,0 +1,19 @@
+# Ambientes Virtuais
+venv/
+env/
+
+# Ficheiros de ambiente (Segurança)
+.env
+.env.*
+
+# Ficheiros compilados do Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ficheiros do sistema operativo
+.DS_Store
+Thumbs.db
+
+# Cache de IA e LangGraph
+.langchain.cache
