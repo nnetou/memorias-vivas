@@ -10,7 +10,8 @@ class Settings:
     
     # Busca as chaves que escreveste no ficheiro .env
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+    APP_ENV: str = os.getenv("APP_ENV", "development")
     
     BACKEND_CORS_ORIGINS: list[str] = ["*"]
 

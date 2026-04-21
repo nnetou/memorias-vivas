@@ -12,7 +12,7 @@ dev:
 # ======= BACKEND =======
 setup-back:
 	@echo "A configurar o Backend..."
-	cd backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+	cd backend && python3.12 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
 
 run-back:
 	@echo "A inciar o servidor base FastAPI (Backend)..."
