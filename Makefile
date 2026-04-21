@@ -11,12 +11,12 @@ dev:
 
 # ======= BACKEND =======
 setup-back:
-	@echo "A configurar o Backend..."
-	cd backend && python3.12 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+	@echo "A construir os contentores Docker do Backend (API, DB, Redis)..."
+	docker compose build
 
 run-back:
-	@echo "A inciar o servidor base FastAPI (Backend)..."
-	cd backend && source venv/bin/activate && uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+	@echo "A inciar os serviços em Docker (FastAPI, Postgres, Redis)..."
+	docker compose up -d
 
 # ======= FRONTEND =======
 # NOTA: Como a pasta frontend apenas tem o README por agora, a makefile verifica se existe um package.json antes de executar npm.
@@ -29,9 +29,10 @@ run-front:
 	@if [ -f frontend/package.json ]; then cd frontend && npm run dev; else echo "[Aviso] Frontend vazio! Por favor inicializa um projeto frontend (ex: Vite/NextJS) na pasta frontend."; fi
 
 # ======= UTILITÁRIOS =======
-# Limpa as pastas geradas (ex: venv, node_modules)
+# Limpa as pastas geradas (ex: venv, node_modules) e desliga contentores
 clean:
-	@echo "A limpar ficheiros temporários..."
+	@echo "A limpar ficheiros temporários e contentores..."
+	docker compose down -v
 	rm -rf backend/venv
 	rm -rf frontend/node_modules
 	find . -type d -name "__pycache__" -exec rm -rf {} +

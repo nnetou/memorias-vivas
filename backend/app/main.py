@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.routers import items, users, chat
+from app.api import chat
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -17,8 +17,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(items.router, prefix="/api/v1/items", tags=["Items"])
-app.include_router(users.router, prefix="/api/v1/users", tags=["Users"])
 app.include_router(chat.router,  prefix="/api/v1/chat",  tags=["Chat"])
 
 # Rota de Health Check (Boa Prática)
