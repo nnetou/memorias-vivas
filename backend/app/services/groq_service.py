@@ -1,18 +1,22 @@
 """
-Serviço de integração com a API Groq (Llama 3.3 70B).
-- Responde sempre em Português de Portugal (PT-PT).
-- Suporta modo streaming para baixa latência no primeiro token.
-- Regista o tempo até ao primeiro token (TTFT) para monitorização.
+groq_service.py — Integração com a API Groq (Llama 3.3 70B).
+
+Modos de operação:
+    chat()                      → resposta genérica (PT-PT)
+    chat_stream()               → idem, em streaming
+    conversa_personalizada()    → pergunta dinâmica baseada em tema + perfil do idoso
+    conversa_personalizada_stream() → idem, em streaming
 """
 
 from __future__ import annotations
 
+import json
 import time
 import logging
-from typing import Generator
+from typing import Generator, Optional
+
 from groq import Groq
 from app.core.config import settings
-from app.services.guioes import get_system_prompt as get_guiao_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +30,54 @@ _BASE = (
     "Quando não souberes algo, diz-o com honestidade e gentileza."
 )
 
-SYSTEM_PT_PT = f"""És um assistente conversacional empático do projeto Memórias Vivas, 
-desenhado para apoiar e acompanhar pessoas idosas. {_BASE}"""
+SYSTEM_PT_PT = (
+    f"És um assistente conversacional empático do projeto Memórias Vivas, "
+    f"desenhado para apoiar e acompanhar pessoas idosas. {_BASE}"
+)
 
 # ---------------------------------------------------------------------------
-# Prompts especializados por tema
-# Cada tema injeta contexto adicional no system prompt para guiar o modelo.
+# System prompt dinâmico — sem guiões fixos (Epic 2.4)
+# Gerado em runtime com base no tema, perfil biográfico e temas já explorados.
+# ---------------------------------------------------------------------------
+_SYSTEM_DINAMICO_TEMPLATE = """\
+És o assistente Memórias Vivas — empático, paciente e caloroso.
+Conduzes conversas em Português de Portugal (PT-PT) com pessoas idosas.
+
+Tema actual: {tema}
+Perfil do idoso: {perfil_json}
+Temas já explorados em sessões anteriores: {temas_anteriores}
+
+REGRAS OBRIGATÓRIAS:
+1. Faz SEMPRE apenas UMA pergunta de cada vez. Nunca duas.
+2. A pergunta deve ser personalizada com base no perfil do idoso acima.
+3. Não repitas temas já explorados (listados em "Temas já explorados").
+4. Usa linguagem simples, frases curtas e um tom caloroso e paciente.
+5. Após cada resposta do utilizador, começa por confirmar o que ouviste
+   com uma frase curta (ex: "Que memória bonita..." ou "Percebi bem que...").
+6. Só depois de confirmar é que colocas a próxima pergunta.
+7. Nunca inventes factos sobre a vida do utilizador.
+8. Se o utilizador ficar emocionado, reconhece com empatia antes de continuar.
+9. Fala sempre em PT-PT. Evita expressões do Brasil.
+"""
+
+
+def _build_dynamic_system_prompt(
+    tema: str,
+    perfil_json: dict | None,
+    temas_anteriores: list[str] | None,
+) -> str:
+    """Constrói o system prompt dinâmico injectando o perfil e os temas."""
+    perfil_str = json.dumps(perfil_json or {}, ensure_ascii=False, indent=2)
+    temas_str = ", ".join(temas_anteriores or []) or "nenhum"
+    return _SYSTEM_DINAMICO_TEMPLATE.format(
+        tema=tema,
+        perfil_json=perfil_str,
+        temas_anteriores=temas_str,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Prompts especializados por tema (modo genérico / sem perfil)
 # ---------------------------------------------------------------------------
 TEMAS: dict[str, str] = {
     "memorias": (
@@ -64,19 +110,19 @@ TEMAS: dict[str, str] = {
 
 
 def _system_prompt(tema: str | None) -> str:
-    """Devolve o system prompt correto para o tema dado (ou o base se None/inválido)."""
+    """Devolve o system prompt correcto para o tema dado (ou o base se None/inválido)."""
     if not tema:
         return SYSTEM_PT_PT
     return TEMAS.get(tema.lower().strip(), SYSTEM_PT_PT)
 
+
 # ---------------------------------------------------------------------------
-# Cliente Groq (inicializado uma vez, reutilizado em todos os pedidos)
+# Cliente Groq (lazy init, reutilizado em todos os pedidos)
 # ---------------------------------------------------------------------------
 _client: Optional[Groq] = None
 
 
 def _get_client() -> Groq:
-    """Devolve o cliente Groq, criando-o na primeira chamada (lazy init)."""
     global _client
     if _client is None:
         if not settings.GROQ_API_KEY:
@@ -86,36 +132,32 @@ def _get_client() -> Groq:
 
 
 # ---------------------------------------------------------------------------
-# Função principal — chat síncrono
+# chat() — resposta genérica completa
 # ---------------------------------------------------------------------------
-def chat(mensagem: str, historico: Optional[list[dict]] = None, tema: Optional[str] = None) -> dict:
+def chat(
+    mensagem: str,
+    historico: Optional[list[dict]] = None,
+    tema: Optional[str] = None,
+) -> dict:
     """
-    Envia uma mensagem ao modelo Llama 3.3 70B via Groq e devolve a resposta.
-
-    Args:
-        mensagem:  Texto do utilizador.
-        historico: Lista opcional de mensagens anteriores (role/content).
-        tema:      Tema da conversa (ex: 'memorias', 'saude', 'familia').
+    Envia uma mensagem ao Llama 3.3 70B e devolve a resposta completa.
 
     Returns:
-        dict com 'resposta' (str) e 'ttft_ms' (float — ms até ao 1.º token).
+        {"resposta": str, "ttft_ms": float, "tema": str}
     """
     client = _get_client()
-
     mensagens = [{"role": "system", "content": _system_prompt(tema)}]
     if historico:
         mensagens.extend(historico)
     mensagens.append({"role": "user", "content": mensagem})
 
     t0 = time.perf_counter()
-
     resposta = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=mensagens,
         temperature=0.7,
         max_tokens=1024,
     )
-
     ttft_ms = (time.perf_counter() - t0) * 1000
     conteudo = resposta.choices[0].message.content
 
@@ -126,24 +168,19 @@ def chat(mensagem: str, historico: Optional[list[dict]] = None, tema: Optional[s
         resposta.usage.completion_tokens,
         ttft_ms,
     )
-
     return {"resposta": conteudo, "ttft_ms": round(ttft_ms, 1), "tema": tema or "geral"}
 
 
 # ---------------------------------------------------------------------------
-# Função de streaming — devolve um gerador de chunks de texto
+# chat_stream() — streaming genérico
 # ---------------------------------------------------------------------------
-def chat_stream(mensagem: str, historico: list[dict] | None = None, tema: str | None = None) -> Generator[str, None, None]:
-    """
-    Versão streaming do chat. Devolve um gerador que emite chunks de texto
-    à medida que o modelo os produz (Server-Sent Events).
-
-    Uso:
-        for chunk in chat_stream("Olá"):
-            print(chunk, end="", flush=True)
-    """
+def chat_stream(
+    mensagem: str,
+    historico: list[dict] | None = None,
+    tema: str | None = None,
+) -> Generator[str, None, None]:
+    """Versão streaming do chat genérico. Emite chunks de texto."""
     client = _get_client()
-
     mensagens = [{"role": "system", "content": _system_prompt(tema)}]
     if historico:
         mensagens.extend(historico)
@@ -171,43 +208,72 @@ def chat_stream(mensagem: str, historico: list[dict] | None = None, tema: str | 
 
 
 # ---------------------------------------------------------------------------
-# Funções de Entrevista GUIADA por Guioes
+# conversa_personalizada() — pergunta dinâmica baseada no perfil (Epic 2.4)
 # ---------------------------------------------------------------------------
-def entrevista_chat(mensagem: str, tema: str, perguntas_feitas: list[str] | None = None, historico: list[dict] | None = None):
+def conversa_personalizada(
+    mensagem: str,
+    tema: str,
+    perfil_json: dict | None = None,
+    temas_anteriores: list[str] | None = None,
+    historico: list[dict] | None = None,
+) -> dict:
     """
-    Chat para modo entrevista, usando o get_system_prompt do guioes.py.
+    Gera a próxima pergunta personalizada com base no perfil biográfico do idoso.
+
+    Args:
+        mensagem:          Resposta mais recente do utilizador.
+        tema:              Tema da conversa actual (ex: "infancia", "trabalho").
+        perfil_json:       Perfil biográfico extraído pelo Gemini no onboarding.
+        temas_anteriores:  Temas já explorados em sessões anteriores.
+        historico:         Histórico da sessão actual.
+
+    Returns:
+        {"resposta": str, "ttft_ms": float, "tema": str}
     """
     client = _get_client()
-    system_prompt = get_guiao_prompt(tema, perguntas_feitas)
+    system = _build_dynamic_system_prompt(tema, perfil_json, temas_anteriores)
 
-    mensagens = [{"role": "system", "content": system_prompt}]
+    mensagens = [{"role": "system", "content": system}]
     if historico:
         mensagens.extend(historico)
     mensagens.append({"role": "user", "content": mensagem})
 
     t0 = time.perf_counter()
-
     resposta = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=mensagens,
-        temperature=0.7,
-        max_tokens=1024,
+        temperature=0.75,
+        max_tokens=512,
     )
-
     ttft_ms = (time.perf_counter() - t0) * 1000
     conteudo = resposta.choices[0].message.content
 
+    logger.info(
+        "Groq dinâmico | tema=%s | ttft=%.1fms",
+        tema,
+        ttft_ms,
+    )
     return {"resposta": conteudo, "ttft_ms": round(ttft_ms, 1), "tema": tema}
 
 
-def entrevista_chat_stream(mensagem: str, tema: str, perguntas_feitas: list[str] | None = None, historico: list[dict] | None = None) -> Generator[str, None, None]:
+# ---------------------------------------------------------------------------
+# conversa_personalizada_stream() — versão streaming
+# ---------------------------------------------------------------------------
+def conversa_personalizada_stream(
+    mensagem: str,
+    tema: str,
+    perfil_json: dict | None = None,
+    temas_anteriores: list[str] | None = None,
+    historico: list[dict] | None = None,
+) -> Generator[str, None, None]:
     """
-    Versão streaming para a entrevista.
+    Versão streaming da conversa personalizada.
+    Emite chunks de texto à medida que o modelo os produz.
     """
     client = _get_client()
-    system_prompt = get_guiao_prompt(tema, perguntas_feitas)
+    system = _build_dynamic_system_prompt(tema, perfil_json, temas_anteriores)
 
-    mensagens = [{"role": "system", "content": system_prompt}]
+    mensagens = [{"role": "system", "content": system}]
     if historico:
         mensagens.extend(historico)
     mensagens.append({"role": "user", "content": mensagem})
@@ -218,8 +284,8 @@ def entrevista_chat_stream(mensagem: str, tema: str, perguntas_feitas: list[str]
     stream = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=mensagens,
-        temperature=0.7,
-        max_tokens=1024,
+        temperature=0.75,
+        max_tokens=512,
         stream=True,
     )
 
@@ -228,5 +294,6 @@ def entrevista_chat_stream(mensagem: str, tema: str, perguntas_feitas: list[str]
         if delta:
             if primeiro_token:
                 ttft_ms = (time.perf_counter() - t0) * 1000
+                logger.info("Groq dinâmico streaming | tema=%s | TTFT=%.1fms", tema, ttft_ms)
                 primeiro_token = False
             yield delta

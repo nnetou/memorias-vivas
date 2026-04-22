@@ -6,3 +6,15 @@ langchain-groq>=0.0.1
 langchain-google-genai>=1.0.0
 python-dotenv>=1.0.1
 python-multipart>=0.0.9
+
+# Base de dados
+sqlalchemy[asyncio]>=2.0.30
+asyncpg>=0.29.0
+alembic>=1.13.0
+
+# Cache / memória curta
+redis[hiredis]>=5.0.3
+
+# IA — clientes directos
+groq>=0.9.0
+google-generativeai>=0.7.0
