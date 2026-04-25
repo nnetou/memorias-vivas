@@ -14,6 +14,9 @@ Endpoints:
 
 from __future__ import annotations
 
+import logging
+from typing import AsyncGenerator
+
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -22,9 +25,38 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.services import groq_service
 from app.services import onboarding_service, profile_service
+from app.services.redis_service import (
+    get_historico,
+    append_interacao,
+)
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# ===========================================================================
+# Helpers de sessão
+# ===========================================================================
+ 
+async def _resolver_historico(
+    session_id: str | None,
+    historico_payload: list[dict] | None,
+) -> tuple[list[dict], str | None]:
+
+    if session_id:
+        historico = await get_historico(session_id)
+        logger.debug("Histórico Redis | sessão=%s | msgs=%d", session_id, len(historico))
+        return historico, session_id
+ 
+    return historico_payload or [], None
+ 
+ 
+async def _persistir_se_redis(
+    session_id: str | None,
+    user_msg: str,
+    assistant_msg: str,
+) -> None:
+    if session_id:
+        await append_interacao(session_id, user_msg, assistant_msg)
 
 # ===========================================================================
 # Schemas comuns
@@ -32,32 +64,49 @@ router = APIRouter()
 
 TEMAS_VALIDOS = ["memorias", "saude", "entretenimento", "familia", "exercicio", "geral"]
 
+_SESSION_ID_FIELD = Field(
+    default=None,
+    description=(
+        "ID de sessão para gestão de histórico via Redis. "
+        "Se omitido, o histórico deve ser enviado em cada pedido (modo legado)."
+    ),
+)
 
 class MensagemEntrada(BaseModel):
     mensagem: str = Field(..., min_length=1, max_length=4096)
     historico: list[dict] | None = Field(
         default=None,
-        description="Histórico opcional [{role, content}, ...]"
+        description="Histórico opcional [{role, content}, ...]. Ignorado se session_id for fornecido."
     )
+    session_id: str | None = _SESSION_ID_FIELD
 
 
 class MensagemInput(BaseModel):
     """Schema para conversa genérica por tema."""
     mensagem: str = Field(..., min_length=1, max_length=4096)
     tema: str = Field(default="geral", description=f"Tema válido: {TEMAS_VALIDOS}")
-    historico: list[dict] | None = None
+    historico: list[dict] |  None = Field(
+        default=None,
+        description="Ignorado se session_id for fornecido."
+    )
+    session_id: str | None = _SESSION_ID_FIELD
 
 
 class RespostaChat(BaseModel):
     resposta: str
     tema: str = Field(default="geral")
     ttft_ms: float = Field(description="Tempo até ao primeiro token (ms).")
+    session_id: str | None = Field(
+        default=None,
+        description="session_id activo, se Redis foi usado. None caso contrário.",
+    )
 
 
 class RespostaConversa(BaseModel):
     resposta: str
     tema: str
     ttft_ms: float
+    session_id: str | None = Field(default=None)
 
 
 # ===========================================================================
@@ -110,6 +159,7 @@ class ConversaPersonalizadaInput(BaseModel):
         default=True,
         description="Se True, adiciona o tema à lista de temas explorados do utilizador."
     )
+    session_id: str | None = _SESSION_ID_FIELD
 
 
 # ===========================================================================
@@ -119,13 +169,17 @@ class ConversaPersonalizadaInput(BaseModel):
 @router.post("/", response_model=RespostaChat, summary="Enviar mensagem ao assistente")
 async def chat_endpoint(payload: MensagemEntrada):
     """Envia uma mensagem ao Llama 3.3 70B e devolve a resposta completa em PT-PT."""
+    historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
+ 
     try:
-        resultado = groq_service.chat(payload.mensagem, payload.historico)
+        resultado = groq_service.chat(payload.mensagem, historico)
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Erro na API Groq: {exc}")
-    return resultado
+ 
+    await _persistir_se_redis(session_id, payload.mensagem, resultado["resposta"])
+    return {**resultado, "session_id": session_id}
 
 
 # ===========================================================================
@@ -135,20 +189,25 @@ async def chat_endpoint(payload: MensagemEntrada):
 @router.post("/stream", summary="Chat em streaming (SSE)")
 async def chat_stream_endpoint(payload: MensagemEntrada):
     """Versão streaming do chat — devolve chunks via Server-Sent Events."""
-    def _gen():
+    historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
+
+    async def _gen() -> AsyncGenerator[str, None]:
+        chunks: list[str] = []
         try:
-            for chunk in groq_service.chat_stream(payload.mensagem, payload.historico):
+            for chunk in groq_service.chat_stream(payload.mensagem, historico):
+                chunks.append(chunk)
                 yield f"data: {chunk}\n\n"
         except Exception as exc:
             yield f"data: [ERRO] {exc}\n\n"
+            return
         finally:
             yield "data: [DONE]\n\n"
-
-    return StreamingResponse(
-        _gen(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+        await _persistir_se_redis(session_id, payload.mensagem, "".join(chunks))
+ 
+    headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    if session_id:
+        headers["X-Session-Id"] = session_id
+    return StreamingResponse(_gen(), media_type="text/event-stream", headers=headers)
 
 
 # ===========================================================================
@@ -158,38 +217,45 @@ async def chat_stream_endpoint(payload: MensagemEntrada):
 @router.post("/conversa", response_model=RespostaConversa, summary="Conversa genérica por tema")
 async def conversa_endpoint(payload: MensagemInput):
     """Conversa com system prompt adaptado ao tema (sem perfil biográfico)."""
+    historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
+ 
     try:
         resultado = groq_service.chat(
             mensagem=payload.mensagem,
-            historico=payload.historico,
+            historico=historico,
             tema=payload.tema,
         )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Erro na API Groq: {exc}")
-    return resultado
+ 
+    await _persistir_se_redis(session_id, payload.mensagem, resultado["resposta"])
+    return {**resultado, "session_id": session_id}
 
 
 @router.post("/conversa/stream", summary="Conversa genérica por tema em streaming (SSE)")
 async def conversa_stream_endpoint(payload: MensagemInput):
     """Versão streaming da conversa por tema."""
-    def _gen():
+    historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
+ 
+    async def _gen() -> AsyncGenerator[str, None]:
+        chunks: list[str] = []
         try:
-            for chunk in groq_service.chat_stream(
-                payload.mensagem, payload.historico, payload.tema
-            ):
+            for chunk in groq_service.chat_stream(payload.mensagem, historico, payload.tema):
+                chunks.append(chunk)
                 yield f"data: {chunk}\n\n"
         except Exception as exc:
             yield f"data: [ERRO] {exc}\n\n"
+            return
         finally:
             yield "data: [DONE]\n\n"
-
-    return StreamingResponse(
-        _gen(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+        await _persistir_se_redis(session_id, payload.mensagem, "".join(chunks))
+ 
+    headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    if session_id:
+        headers["X-Session-Id"] = session_id
+    return StreamingResponse(_gen(), media_type="text/event-stream", headers=headers)
 
 
 # ===========================================================================
@@ -301,41 +367,35 @@ async def conversa_personalizada_endpoint(
     payload: ConversaPersonalizadaInput,
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Gera a próxima pergunta personalizada usando o Groq com o perfil biográfico do idoso.
-
-    Requer que o onboarding já tenha sido concluído.
-    O system prompt é gerado dinamicamente: tema + perfil + temas_anteriores.
-    """
-    # Carrega o perfil do utilizador
+    """Gera a próxima pergunta personalizada. Requer onboarding concluído."""
     perfil_db = await profile_service.get_profile(payload.user_id, db)
     if perfil_db is None:
         raise HTTPException(
             status_code=404,
             detail="Perfil não encontrado. Complete o onboarding primeiro."
         )
-
+ 
     temas_anteriores = await profile_service.get_temas_explorados(payload.user_id, db)
-
+    historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
+ 
     try:
         resultado = groq_service.conversa_personalizada(
             mensagem=payload.mensagem,
             tema=payload.tema,
             perfil_json=perfil_db.perfil_json,
             temas_anteriores=temas_anteriores,
-            historico=payload.historico,
+            historico=historico,
         )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Erro na API Groq: {exc}")
-
-    # Regista o tema explorado (em background para não atrasar a resposta)
+ 
     if payload.registar_tema:
         await profile_service.add_tema_explorado(payload.user_id, payload.tema, db)
-
-    return resultado
-
+ 
+    await _persistir_se_redis(session_id, payload.mensagem, resultado["resposta"])
+    return {**resultado, "session_id": session_id}
 
 @router.post(
     "/conversa/personalizada/stream",
@@ -352,29 +412,33 @@ async def conversa_personalizada_stream_endpoint(
             status_code=404,
             detail="Perfil não encontrado. Complete o onboarding primeiro."
         )
-
+ 
     temas_anteriores = await profile_service.get_temas_explorados(payload.user_id, db)
-
+    historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
+ 
     if payload.registar_tema:
         await profile_service.add_tema_explorado(payload.user_id, payload.tema, db)
-
-    def _gen():
+ 
+    async def _gen() -> AsyncGenerator[str, None]:
+        chunks: list[str] = []
         try:
             for chunk in groq_service.conversa_personalizada_stream(
                 mensagem=payload.mensagem,
                 tema=payload.tema,
                 perfil_json=perfil_db.perfil_json,
                 temas_anteriores=temas_anteriores,
-                historico=payload.historico,
+                historico=historico,
             ):
+                chunks.append(chunk)
                 yield f"data: {chunk}\n\n"
         except Exception as exc:
             yield f"data: [ERRO] {exc}\n\n"
+            return
         finally:
             yield "data: [DONE]\n\n"
-
-    return StreamingResponse(
-        _gen(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+        await _persistir_se_redis(session_id, payload.mensagem, "".join(chunks))
+ 
+    headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    if session_id:
+        headers["X-Session-Id"] = session_id
+    return StreamingResponse(_gen(), media_type="text/event-stream", headers=headers)
