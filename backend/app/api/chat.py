@@ -2,18 +2,23 @@
 Router de Chat — endpoints de conversação com o assistente Memórias Vivas.
 
 Endpoints:
-    POST /api/v1/chat/                       → resposta completa (JSON)
-    POST /api/v1/chat/stream                 → resposta em streaming (SSE)
-    POST /api/v1/chat/conversa               → conversa genérica por tema (JSON)
-    POST /api/v1/chat/conversa/stream        → conversa genérica por tema (SSE)
+    POST /api/v1/chat/                               → resposta completa (JSON)
+    POST /api/v1/chat/stream                         → resposta em streaming (SSE)
+    POST /api/v1/chat/conversa                       → conversa por tema (JSON)
+    POST /api/v1/chat/conversa/stream                → conversa por tema (SSE)
+    POST /api/v1/chat/onboarding                     → fluxo de onboarding
+    POST /api/v1/chat/conversa/personalizada         → conversa com perfil (JSON)
+    POST /api/v1/chat/conversa/personalizada/stream  → conversa com perfil (SSE)
+    POST /api/v1/chat/sessao/encerrar                → merge + persistência (Epic 4.2)
 
-    POST /api/v1/chat/onboarding             → fluxo de onboarding (1.º acesso)
-    POST /api/v1/chat/conversa/personalizada         → conversa dinâmica pós-onboarding (JSON)
-    POST /api/v1/chat/conversa/personalizada/stream  → idem, em streaming (SSE)
+Memória curta  (Epic 4.1): Redis via session_id opcional.
+Memória longa  (Epic 4.2): perfil do PostgreSQL injetado no Groq;
+                           merge via LangGraph+Gemini ao encerrar sessão.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import AsyncGenerator
 
@@ -23,33 +28,48 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.services import groq_service
-from app.services import onboarding_service, profile_service
+from app.services import groq_service, onboarding_service, profile_service
+from app.services.langgraph_service import executar_merge
 from app.services.redis_service import (
     get_historico,
+    set_historico,
     append_interacao,
+    delete_historico,
 )
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+
 # ===========================================================================
-# Helpers de sessão
+# Helpers de sessão (Epic 4.1)
 # ===========================================================================
- 
+
+import uuid as _uuid_mod
+
 async def _resolver_historico(
     session_id: str | None,
     historico_payload: list[dict] | None,
-) -> tuple[list[dict], str | None]:
+) -> tuple[list[dict], str]:
+    """
+    Resolve o histórico e garante que session_id existe sempre.
 
-    if session_id:
-        historico = await get_historico(session_id)
-        logger.debug("Histórico Redis | sessão=%s | msgs=%d", session_id, len(historico))
-        return historico, session_id
- 
-    return historico_payload or [], None
- 
- 
+    - session_id presente → histórico vem do Redis
+    - session_id ausente  → gera um novo UUID, inicia sessão Redis vazia
+    """
+    if not session_id:
+        session_id = str(_uuid_mod.uuid4())
+        logger.debug("Nova sessão criada: %s", session_id)
+        # Se o cliente enviou histórico legado, persistimos já no Redis
+        if historico_payload:
+            await set_historico(session_id, historico_payload)
+        return historico_payload or [], session_id
+
+    historico = await get_historico(session_id)
+    logger.debug("Histórico Redis | sessão=%s | msgs=%d", session_id, len(historico))
+    return historico, session_id
+
+
 async def _persistir_se_redis(
     session_id: str | None,
     user_msg: str,
@@ -58,48 +78,37 @@ async def _persistir_se_redis(
     if session_id:
         await append_interacao(session_id, user_msg, assistant_msg)
 
+
 # ===========================================================================
-# Schemas comuns
+# Schemas
 # ===========================================================================
 
 TEMAS_VALIDOS = ["memorias", "saude", "entretenimento", "familia", "exercicio", "geral"]
 
-_SESSION_ID_FIELD = Field(
+_SESSION_FIELD = Field(
     default=None,
-    description=(
-        "ID de sessão para gestão de histórico via Redis. "
-        "Se omitido, o histórico deve ser enviado em cada pedido (modo legado)."
-    ),
+    description="ID Redis da sessão. Se omitido, usa historico do payload.",
 )
+
 
 class MensagemEntrada(BaseModel):
     mensagem: str = Field(..., min_length=1, max_length=4096)
-    historico: list[dict] | None = Field(
-        default=None,
-        description="Histórico opcional [{role, content}, ...]. Ignorado se session_id for fornecido."
-    )
-    session_id: str | None = _SESSION_ID_FIELD
+    historico: list[dict] | None = Field(default=None)
+    session_id: str | None = _SESSION_FIELD
 
 
 class MensagemInput(BaseModel):
-    """Schema para conversa genérica por tema."""
     mensagem: str = Field(..., min_length=1, max_length=4096)
-    tema: str = Field(default="geral", description=f"Tema válido: {TEMAS_VALIDOS}")
-    historico: list[dict] |  None = Field(
-        default=None,
-        description="Ignorado se session_id for fornecido."
-    )
-    session_id: str | None = _SESSION_ID_FIELD
+    tema: str = Field(default="geral")
+    historico: list[dict] | None = Field(default=None)
+    session_id: str | None = _SESSION_FIELD
 
 
 class RespostaChat(BaseModel):
     resposta: str
     tema: str = Field(default="geral")
-    ttft_ms: float = Field(description="Tempo até ao primeiro token (ms).")
-    session_id: str | None = Field(
-        default=None,
-        description="session_id activo, se Redis foi usado. None caso contrário.",
-    )
+    ttft_ms: float
+    session_id: str | None = Field(default=None)
 
 
 class RespostaConversa(BaseModel):
@@ -109,86 +118,70 @@ class RespostaConversa(BaseModel):
     session_id: str | None = Field(default=None)
 
 
-# ===========================================================================
-# Schemas de Onboarding
-# ===========================================================================
-
 class OnboardingInput(BaseModel):
-    """
-    Payload enviado em cada turno do onboarding.
-
-    - Na 1.ª chamada, `mensagem` pode ser vazia (ou "começar") para receber as boas-vindas.
-    - Nas seguintes, `mensagem` contém a resposta do idoso à pergunta anterior.
-    """
-    user_id: str = Field(..., description="UUID único do utilizador.")
-    mensagem: str = Field(default="", max_length=4096, description="Resposta do utilizador.")
-    historico: list[dict] = Field(
-        default_factory=list,
-        description="Histórico acumulado da sessão de onboarding [{role, content}]."
-    )
+    user_id: str
+    mensagem: str = Field(default="", max_length=4096)
+    historico: list[dict] = Field(default_factory=list)
 
 
 class OnboardingResponse(BaseModel):
-    pergunta: str | None = Field(
-        description="Próxima pergunta de onboarding. None quando o onboarding está completo."
-    )
+    pergunta: str | None
     onboarding_completo: bool
-    perfil_extraido: dict | None = Field(
-        default=None,
-        description="Perfil biográfico JSON extraído pelo Gemini (só presente quando completo)."
-    )
-    historico_atualizado: list[dict] = Field(
-        description="Histórico actualizado para o frontend guardar e reenviar."
-    )
+    perfil_extraido: dict | None = Field(default=None)
+    historico_atualizado: list[dict]
 
-
-# ===========================================================================
-# Schemas de Conversa Personalizada (pós-onboarding)
-# ===========================================================================
 
 class ConversaPersonalizadaInput(BaseModel):
-    """Payload para a conversa dinâmica pós-onboarding."""
-    user_id: str = Field(..., description="UUID único do utilizador.")
+    user_id: str
     mensagem: str = Field(..., min_length=1, max_length=4096)
-    tema: str = Field(..., description="Tema da conversa (ex: infancia, trabalho, receitas).")
-    historico: list[dict] | None = Field(
+    tema: str
+    historico: list[dict] | None = Field(default=None)
+    registar_tema: bool = Field(default=True)
+    session_id: str | None = _SESSION_FIELD
+
+
+class EncerrarSessaoInput(BaseModel):
+    user_id: str = Field(..., description="UUID do utilizador.")
+    session_id: str | None = Field(
         default=None,
-        description="Histórico da sessão actual."
+        description="ID Redis a limpar após encerramento.",
     )
-    registar_tema: bool = Field(
-        default=True,
-        description="Se True, adiciona o tema à lista de temas explorados do utilizador."
+    historico_sessao: list[dict] = Field(
+        ...,
+        description="Histórico completo da sessão para extração Gemini.",
     )
-    session_id: str | None = _SESSION_ID_FIELD
+
+
+class EncerrarSessaoResponse(BaseModel):
+    user_id: str
+    perfil_atualizado: bool
+    mensagem: str
+    erro: str | None = Field(default=None)
 
 
 # ===========================================================================
-# POST /api/v1/chat/  — resposta completa genérica
+# POST /  — chat genérico
 # ===========================================================================
 
-@router.post("/", response_model=RespostaChat, summary="Enviar mensagem ao assistente")
+@router.post("/", response_model=RespostaChat)
 async def chat_endpoint(payload: MensagemEntrada):
-    """Envia uma mensagem ao Llama 3.3 70B e devolve a resposta completa em PT-PT."""
     historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
- 
     try:
         resultado = groq_service.chat(payload.mensagem, historico)
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Erro na API Groq: {exc}")
- 
+        raise HTTPException(status_code=502, detail=f"Erro Groq: {exc}")
     await _persistir_se_redis(session_id, payload.mensagem, resultado["resposta"])
     return {**resultado, "session_id": session_id}
 
 
 # ===========================================================================
-# POST /api/v1/chat/stream  — streaming genérico
+# POST /stream
 # ===========================================================================
 
-@router.post("/stream", summary="Chat em streaming (SSE)")
+@router.post("/stream")
 async def chat_stream_endpoint(payload: MensagemEntrada):
-    """Versão streaming do chat — devolve chunks via Server-Sent Events."""
     historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
 
     async def _gen() -> AsyncGenerator[str, None]:
@@ -203,7 +196,7 @@ async def chat_stream_endpoint(payload: MensagemEntrada):
         finally:
             yield "data: [DONE]\n\n"
         await _persistir_se_redis(session_id, payload.mensagem, "".join(chunks))
- 
+
     headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     if session_id:
         headers["X-Session-Id"] = session_id
@@ -211,14 +204,12 @@ async def chat_stream_endpoint(payload: MensagemEntrada):
 
 
 # ===========================================================================
-# POST /api/v1/chat/conversa  — conversa genérica por tema
+# POST /conversa
 # ===========================================================================
 
-@router.post("/conversa", response_model=RespostaConversa, summary="Conversa genérica por tema")
+@router.post("/conversa", response_model=RespostaConversa)
 async def conversa_endpoint(payload: MensagemInput):
-    """Conversa com system prompt adaptado ao tema (sem perfil biográfico)."""
     historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
- 
     try:
         resultado = groq_service.chat(
             mensagem=payload.mensagem,
@@ -228,17 +219,15 @@ async def conversa_endpoint(payload: MensagemInput):
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Erro na API Groq: {exc}")
- 
+        raise HTTPException(status_code=502, detail=f"Erro Groq: {exc}")
     await _persistir_se_redis(session_id, payload.mensagem, resultado["resposta"])
     return {**resultado, "session_id": session_id}
 
 
-@router.post("/conversa/stream", summary="Conversa genérica por tema em streaming (SSE)")
+@router.post("/conversa/stream")
 async def conversa_stream_endpoint(payload: MensagemInput):
-    """Versão streaming da conversa por tema."""
     historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
- 
+
     async def _gen() -> AsyncGenerator[str, None]:
         chunks: list[str] = []
         try:
@@ -251,7 +240,7 @@ async def conversa_stream_endpoint(payload: MensagemInput):
         finally:
             yield "data: [DONE]\n\n"
         await _persistir_se_redis(session_id, payload.mensagem, "".join(chunks))
- 
+
     headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     if session_id:
         headers["X-Session-Id"] = session_id
@@ -259,55 +248,37 @@ async def conversa_stream_endpoint(payload: MensagemInput):
 
 
 # ===========================================================================
-# POST /api/v1/chat/onboarding  — fluxo de onboarding (1.º acesso)
+# POST /onboarding  (INALTERADO)
 # ===========================================================================
 
-@router.post(
-    "/onboarding",
-    response_model=OnboardingResponse,
-    summary="Onboarding — recolha de perfil biográfico (1.º acesso)",
-)
+@router.post("/onboarding", response_model=OnboardingResponse)
 async def onboarding_endpoint(
     payload: OnboardingInput,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Conduz a conversa de onboarding com 5 perguntas fixas.
-
-    **Fluxo:**
-    1. Frontend chama este endpoint com `historico=[]` e `mensagem=""` para começar.
-    2. Endpoint devolve a mensagem de boas-vindas + 1.ª pergunta.
-    3. Frontend guarda o `historico_atualizado` e reenvia com a resposta do utilizador.
-    4. Repete até `onboarding_completo=true`.
-    5. Quando completo, o Gemini extrai o perfil e persiste no PostgreSQL.
+    Onboarding stateless — o frontend é o dono do histórico.
+    Necessário para enviar o histórico completo ao Gemini no final.
     """
     historico = list(payload.historico)
 
-    # Verifica se o utilizador já completou o onboarding
     ja_feito = await profile_service.is_onboarding_done(payload.user_id, db)
     if ja_feito:
         raise HTTPException(
             status_code=409,
-            detail="Onboarding já concluído para este utilizador. Use /conversa/personalizada."
+            detail="Onboarding já concluído. Use /conversa/personalizada.",
         )
 
-    # Acrescenta a resposta do utilizador ao histórico (se não estiver vazia)
     if payload.mensagem.strip():
         historico.append({"role": "user", "content": payload.mensagem.strip()})
 
-    # Verifica se o onboarding está completo
     if onboarding_service.is_onboarding_complete(historico):
-        # Extrai perfil com Gemini (operação assíncrona)
         try:
             perfil = await onboarding_service.extract_profile_with_gemini(historico)
         except Exception as exc:
-            raise HTTPException(
-                status_code=502,
-                detail=f"Erro ao extrair perfil com Gemini: {exc}"
-            )
+            raise HTTPException(status_code=502, detail=f"Erro Gemini: {exc}")
 
-        # Persiste no PostgreSQL
         nome = (perfil or {}).get("nome")
         await profile_service.save_profile(
             user_id=payload.user_id,
@@ -320,7 +291,6 @@ async def onboarding_endpoint(
             nome=nome,
             db=db,
         )
-
         return OnboardingResponse(
             pergunta=None,
             onboarding_completo=True,
@@ -328,25 +298,18 @@ async def onboarding_endpoint(
             historico_atualizado=historico,
         )
 
-    # Determina a próxima pergunta
     proxima_pergunta = onboarding_service.get_next_question(historico)
-
     if proxima_pergunta is None:
-        # Caso de segurança: todas as perguntas feitas mas sem resposta final
         return OnboardingResponse(
             pergunta=None,
             onboarding_completo=False,
             historico_atualizado=historico,
         )
 
-    # Primeira vez: adiciona boas-vindas antes da 1.ª pergunta
     if not historico:
-        boas_vindas = onboarding_service.get_boas_vindas()
-        historico.append({"role": "assistant", "content": boas_vindas})
+        historico.append({"role": "assistant", "content": onboarding_service.get_boas_vindas()})
 
-    # Acrescenta a pergunta ao histórico
     historico.append({"role": "assistant", "content": proxima_pergunta})
-
     return OnboardingResponse(
         pergunta=proxima_pergunta,
         onboarding_completo=False,
@@ -355,70 +318,86 @@ async def onboarding_endpoint(
 
 
 # ===========================================================================
-# POST /api/v1/chat/conversa/personalizada  — dinâmica pós-onboarding
+# POST /conversa/personalizada  (Epic 4.2 — perfil do PostgreSQL injetado)
 # ===========================================================================
 
-@router.post(
-    "/conversa/personalizada",
-    response_model=RespostaConversa,
-    summary="Conversa personalizada com base no perfil do idoso",
-)
+@router.post("/conversa/personalizada", response_model=RespostaConversa)
 async def conversa_personalizada_endpoint(
     payload: ConversaPersonalizadaInput,
     db: AsyncSession = Depends(get_db),
 ):
-    """Gera a próxima pergunta personalizada. Requer onboarding concluído."""
+    """
+    O perfil biográfico é carregado do PostgreSQL e passado ao groq_service,
+    que já o injeta no system prompt via _build_dynamic_system_prompt.
+    Sem hacks adicionais — o groq_service faz o trabalho correto.
+    """
+    # ── Diagnóstico: confirmar que o user_id chega bem formado ───────────────
+    import uuid as _uuid
+    try:
+        _uuid.UUID(payload.user_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail=f"user_id inválido: '{payload.user_id}' não é um UUID válido.")
+    # ────────────────────────────────────────────────────────────────────────
+
     perfil_db = await profile_service.get_profile(payload.user_id, db)
+
+    # ── Diagnóstico: confirmar se o perfil foi encontrado e qual o conteúdo ──
     if perfil_db is None:
+        logger.warning(
+            "DIAGNÓSTICO | user=%s | perfil NÃO encontrado na DB "
+            "(verifica se o utilizador_id na tabela corresponde exactamente a este UUID)",
+            payload.user_id,
+        )
         raise HTTPException(
             status_code=404,
-            detail="Perfil não encontrado. Complete o onboarding primeiro."
+            detail="Perfil não encontrado. Complete o onboarding primeiro.",
         )
- 
+
+    logger.info(
+        "DIAGNÓSTICO | user=%s | perfil encontrado | conteúdo: %s",
+        payload.user_id,
+        perfil_db.perfil_json,
+    )
+    # ────────────────────────────────────────────────────────────────────────
+
     temas_anteriores = await profile_service.get_temas_explorados(payload.user_id, db)
     historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
- 
+
     try:
         resultado = groq_service.conversa_personalizada(
             mensagem=payload.mensagem,
             tema=payload.tema,
-            perfil_json=perfil_db.perfil_json,
+            perfil_json=perfil_db.perfil_json,   # perfil do PostgreSQL, direto
             temas_anteriores=temas_anteriores,
             historico=historico,
         )
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Erro na API Groq: {exc}")
- 
+        raise HTTPException(status_code=502, detail=f"Erro Groq: {exc}")
+
     if payload.registar_tema:
         await profile_service.add_tema_explorado(payload.user_id, payload.tema, db)
- 
+
     await _persistir_se_redis(session_id, payload.mensagem, resultado["resposta"])
     return {**resultado, "session_id": session_id}
 
-@router.post(
-    "/conversa/personalizada/stream",
-    summary="Conversa personalizada em streaming (SSE)",
-)
+
+@router.post("/conversa/personalizada/stream")
 async def conversa_personalizada_stream_endpoint(
     payload: ConversaPersonalizadaInput,
     db: AsyncSession = Depends(get_db),
 ):
-    """Versão streaming da conversa personalizada."""
     perfil_db = await profile_service.get_profile(payload.user_id, db)
     if perfil_db is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Perfil não encontrado. Complete o onboarding primeiro."
-        )
- 
+        raise HTTPException(status_code=404, detail="Perfil não encontrado.")
+
     temas_anteriores = await profile_service.get_temas_explorados(payload.user_id, db)
     historico, session_id = await _resolver_historico(payload.session_id, payload.historico)
- 
+
     if payload.registar_tema:
         await profile_service.add_tema_explorado(payload.user_id, payload.tema, db)
- 
+
     async def _gen() -> AsyncGenerator[str, None]:
         chunks: list[str] = []
         try:
@@ -437,8 +416,91 @@ async def conversa_personalizada_stream_endpoint(
         finally:
             yield "data: [DONE]\n\n"
         await _persistir_se_redis(session_id, payload.mensagem, "".join(chunks))
- 
+
     headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
     if session_id:
         headers["X-Session-Id"] = session_id
     return StreamingResponse(_gen(), media_type="text/event-stream", headers=headers)
+
+
+# ===========================================================================
+# POST /sessao/encerrar  (Epic 4.2 — merge e persistência)
+# ===========================================================================
+
+@router.post("/sessao/encerrar", response_model=EncerrarSessaoResponse)
+async def encerrar_sessao(
+    payload: EncerrarSessaoInput,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Encerra a sessão e atualiza a memória longa do idoso.
+
+    Fluxo:
+        1. Gemini extrai novos factos do historico_sessao.
+        2. LangGraph faz merge: perfil_antigo (PostgreSQL) + novos_factos.
+        3. Persiste o perfil consolidado no PostgreSQL.
+        4. Limpa o histórico Redis (se session_id fornecido).
+
+    O frontend deve sempre enviar historico_sessao completo — mesmo quando
+    usa Redis — pois o Redis pode ter expirado.
+    """
+    erro: str | None = None
+
+    # 1. Gemini extrai novos factos da sessão
+    try:
+        novos_factos = await onboarding_service.extract_profile_with_gemini(
+            payload.historico_sessao
+        )
+        resumo_sessao_str = json.dumps(novos_factos or {}, ensure_ascii=False)
+    except Exception as exc:
+        logger.warning("Extração Gemini falhou para user=%s: %s", payload.user_id, exc)
+        # Fallback: usa o histórico como texto simples
+        resumo_sessao_str = "\n".join(
+            f"{m.get('role','?').upper()}: {m.get('content','')}"
+            for m in payload.historico_sessao
+            if isinstance(m, dict)
+        )
+        erro = f"Extração Gemini: {exc}"
+
+    # 2. Carrega perfil atual e executa merge via LangGraph
+    perfil_db = await profile_service.get_profile(payload.user_id, db)
+    perfil_antigo = perfil_db.perfil_json if perfil_db else None
+
+    try:
+        perfil_fundido = await executar_merge(
+            user_id=payload.user_id,
+            perfil_antigo=perfil_antigo,
+            resumo_sessao=resumo_sessao_str,
+        )
+    except Exception as exc:
+        logger.exception("Merge falhou para user=%s", payload.user_id)
+        perfil_fundido = perfil_antigo or {}
+        erro = (erro or "") + f" | Merge: {exc}"
+
+    # 3. Persiste no PostgreSQL
+    perfil_atualizado = False
+    if perfil_fundido:
+        try:
+            await profile_service.save_profile(
+                user_id=payload.user_id,
+                perfil_json=perfil_fundido,
+                historico_onboarding=payload.historico_sessao,
+                db=db,
+            )
+            await db.commit()   # garante persistência no PostgreSQL antes de limpar o Redis
+            perfil_atualizado = True
+            logger.info("Perfil atualizado | user=%s", payload.user_id)
+        except Exception as exc:
+            logger.exception("Erro ao guardar perfil | user=%s", payload.user_id)
+            erro = (erro or "") + f" | Save: {exc}"
+
+    # 4. Limpa Redis
+    if payload.session_id:
+        await delete_historico(payload.session_id)
+
+    return EncerrarSessaoResponse(
+        user_id=payload.user_id,
+        perfil_atualizado=perfil_atualizado,
+        mensagem="Sessão encerrada e perfil atualizado." if perfil_atualizado else "Sessão encerrada com erros.",
+        erro=erro,
+    )

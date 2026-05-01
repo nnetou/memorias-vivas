@@ -13,16 +13,22 @@ from __future__ import annotations
 import json
 import logging
 
-import google.generativeai as genai
+from groq import Groq
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Configura Gemini
+# Cliente Groq para extração (substitui Gemini em modo de teste)
 # ---------------------------------------------------------------------------
-genai.configure(api_key=settings.GOOGLE_API_KEY)
+_groq_client: Groq | None = None
+
+def _get_groq() -> Groq:
+    global _groq_client
+    if _groq_client is None:
+        _groq_client = Groq(api_key=settings.GROQ_API_KEY)
+    return _groq_client
 
 # ---------------------------------------------------------------------------
 # Perguntas fixas de onboarding (apresentadas apenas na 1.ª sessão)
@@ -127,21 +133,9 @@ Conversa de onboarding:
 
 async def extract_profile_with_gemini(historico: list[dict]) -> dict:
     """
-    Usa o Gemini 2.5 Flash para extrair o perfil biográfico JSON da conversa de onboarding.
-
-    Args:
-        historico: Lista de mensagens [{role, content}] da conversa de onboarding.
-
-    Returns:
-        Dicionário com os campos biográficos extraídos.
-
-    Raises:
-        ValueError: Se o Gemini não devolver JSON válido.
+    Extrai o perfil biográfico JSON da conversa de onboarding via Groq/Llama.
+    (Substituição do Gemini para testes — evita quotas e problemas de modelo.)
     """
-    if not settings.GOOGLE_API_KEY:
-        raise ValueError("GOOGLE_API_KEY não está configurada.")
-
-    # Formata a conversa para texto legível
     conversa_texto = "\n".join(
         f"{'Assistente' if msg['role'] == 'assistant' else 'Idoso'}: {msg['content']}"
         for msg in historico
@@ -149,31 +143,46 @@ async def extract_profile_with_gemini(historico: list[dict]) -> dict:
 
     prompt = _EXTRACTION_PROMPT.format(conversa=conversa_texto)
 
+    _EMPTY = {
+        "nome": None, "terra_natal": None, "familia": None,
+        "profissao": None, "memoria_marcante": None, "outros": {},
+    }
+
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = await model.generate_content_async(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                response_mime_type="application/json",
-                temperature=0.1,  # baixa temperatura para extração precisa
+        import asyncio
+        loop = asyncio.get_event_loop()
+        resposta = await loop.run_in_executor(
+            None,
+            lambda: _get_groq().chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "És um extractor de perfis biográficos. "
+                            "Respondes APENAS com JSON válido, sem texto adicional nem blocos de código. "
+                            "Segue exatamente o schema pedido."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.1,
+                max_tokens=512,
             ),
         )
-        raw = response.text.strip()
-        perfil = json.loads(raw)
-        logger.info("Gemini extraiu perfil com sucesso: %s", list(perfil.keys()))
+        raw = resposta.choices[0].message.content.strip()
+        # Limpar possíveis blocos de código que o modelo inclua
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        perfil = json.loads(raw.strip())
+        logger.info("Groq extraiu perfil com sucesso: %s", list(perfil.keys()))
         return perfil
 
     except json.JSONDecodeError as exc:
-        logger.error("Gemini devolveu JSON inválido: %s", exc)
-        # Devolve perfil vazio em vez de falhar completamente
-        return {
-            "nome": None,
-            "terra_natal": None,
-            "familia": None,
-            "profissao": None,
-            "memoria_marcante": None,
-            "outros": {},
-        }
+        logger.error("Groq devolveu JSON inválido na extração: %s", exc)
+        return _EMPTY
     except Exception as exc:
-        logger.error("Erro ao chamar Gemini para extração de perfil: %s", exc)
+        logger.error("Erro ao chamar Groq para extração de perfil: %s", exc)
         raise

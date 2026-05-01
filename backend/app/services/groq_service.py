@@ -43,21 +43,30 @@ _SYSTEM_DINAMICO_TEMPLATE = """\
 És o assistente Memórias Vivas — empático, paciente e caloroso.
 Conduzes conversas em Português de Portugal (PT-PT) com pessoas idosas.
 
-Tema actual: {tema}
-Perfil do idoso: {perfil_json}
-Temas já explorados em sessões anteriores: {temas_anteriores}
+════════════════════════════════════════
+MEMÓRIA BIOGRÁFICA — FACTOS JÁ CONHECIDOS SOBRE ESTA PESSOA:
+{perfil_json}
+════════════════════════════════════════
 
-REGRAS OBRIGATÓRIAS:
+IMPORTANTE: Os factos acima NÃO são novidade — já os conheces de sessões anteriores.
+Usa-os ACTIVAMENTE na conversa:
+  • Trata a pessoa pelo nome se estiver disponível no perfil.
+  • Faz referências naturais ao passado: "Como me contou antes...", "Lembro-me que disse que...".
+  • Nunca digas que não tens memória ou que é a primeira vez que falas com esta pessoa.
+  • Nunca peças informações que já constam no perfil acima.
+
+Tema actual: {tema}
+Temas já explorados: {temas_anteriores}
+
+REGRAS DE CONVERSA:
 1. Faz SEMPRE apenas UMA pergunta de cada vez. Nunca duas.
-2. A pergunta deve ser personalizada com base no perfil do idoso acima.
-3. Não repitas temas já explorados (listados em "Temas já explorados").
-4. Usa linguagem simples, frases curtas e um tom caloroso e paciente.
-5. Após cada resposta do utilizador, começa por confirmar o que ouviste
-   com uma frase curta (ex: "Que memória bonita..." ou "Percebi bem que...").
-6. Só depois de confirmar é que colocas a próxima pergunta.
-7. Nunca inventes factos sobre a vida do utilizador.
-8. Se o utilizador ficar emocionado, reconhece com empatia antes de continuar.
-9. Fala sempre em PT-PT. Evita expressões do Brasil.
+2. Personaliza cada pergunta com base nos factos do perfil acima.
+3. Não repitas temas já explorados.
+4. Usa linguagem simples, frases curtas e tom caloroso.
+5. Confirma o que ouviste antes de colocar a próxima pergunta.
+6. Nunca inventes factos que NÃO estejam no perfil.
+7. Se o utilizador ficar emocionado, reconhece com empatia antes de continuar.
+8. Fala sempre em PT-PT. Evita expressões do Brasil.
 """
 
 
@@ -66,14 +75,43 @@ def _build_dynamic_system_prompt(
     perfil_json: dict | None,
     temas_anteriores: list[str] | None,
 ) -> str:
-    """Constrói o system prompt dinâmico injectando o perfil e os temas."""
-    perfil_str = json.dumps(perfil_json or {}, ensure_ascii=False, indent=2)
+    """Constrói o system prompt dinâmico injectando o perfil em linguagem natural."""
+    perfil_str = _perfil_para_texto(perfil_json)
     temas_str = ", ".join(temas_anteriores or []) or "nenhum"
     return _SYSTEM_DINAMICO_TEMPLATE.format(
         tema=tema,
         perfil_json=perfil_str,
         temas_anteriores=temas_str,
     )
+
+
+def _perfil_para_texto(perfil: dict | None) -> str:
+    """
+    Converte o perfil biográfico em texto legível em vez de JSON cru.
+    O Llama interpreta prosa de forma muito mais fiável do que JSON.
+    """
+    if not perfil:
+        return "(sem dados biográficos disponíveis)"
+
+    linhas = []
+    if perfil.get("nome"):
+        linhas.append(f"• Nome: {perfil['nome']}")
+    if perfil.get("terra_natal"):
+        linhas.append(f"• Terra natal: {perfil['terra_natal']}")
+    if perfil.get("profissao"):
+        linhas.append(f"• Profissão: {perfil['profissao']}")
+    if perfil.get("familia"):
+        linhas.append(f"• Família: {perfil['familia']}")
+    if perfil.get("memoria_marcante"):
+        linhas.append(f"• Memória marcante: {perfil['memoria_marcante']}")
+
+    # Campos extra em "outros" (schema rico do merge)
+    outros = perfil.get("outros") or {}
+    for chave, valor in outros.items():
+        if valor:
+            linhas.append(f"• {chave.replace('_', ' ').capitalize()}: {valor}")
+
+    return "\n".join(linhas) if linhas else "(sem dados biográficos disponíveis)"
 
 
 # ---------------------------------------------------------------------------
