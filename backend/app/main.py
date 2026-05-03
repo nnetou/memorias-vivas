@@ -3,6 +3,10 @@ main.py — Ponto de entrada da aplicação FastAPI Memórias Vivas.
 
 Startup:
     - init_db(): cria as tabelas PostgreSQL se não existirem
+    - init_redis(): inicializa o pool de ligações ao Redis
+
+Shutdown:
+    - close_redis(): encerra o pool de ligações ao Redis
 """
 
 from __future__ import annotations
@@ -14,7 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api import chat
+from app.api import chat, audio
 
 logger = logging.getLogger(__name__)
 
@@ -25,29 +29,32 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Inicializa recursos no arranque e liberta-os no shutdown."""
-    # Startup
+
+    # ── Startup ─────────────────────────────────────────────────────────────
     logger.info("A iniciar Memórias Vivas API (env=%s)...", settings.APP_ENV)
 
+    # PostgreSQL
     if settings.DATABASE_URL:
         from app.db.database import init_db
         await init_db()
     else:
         logger.warning("DATABASE_URL não configurada — tabelas não criadas.")
 
+    # Redis — memória curta de sessão (Epic 4.1)
     if settings.REDIS_URL:
         from app.services.redis_service import init_redis
         await init_redis()
     else:
         logger.warning("REDIS_URL não configurada — histórico de sessão não persistido.")
 
-    yield  # a aplicação corre aqui
+    yield  # ── a aplicação corre aqui ────────────────────────────────────────
 
+    # ── Shutdown ─────────────────────────────────────────────────────────────
     if settings.REDIS_URL:
         from app.services.redis_service import close_redis
         await close_redis()
 
-    # Shutdown
-    logger.info("A encerrar Memórias Vivas API.")
+    logger.info("Memórias Vivas API encerrada.")
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +75,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(chat.router, prefix="/api/v1/chat", tags=["Chat"])
+app.include_router(chat.router,  prefix="/api/v1/chat",  tags=["Chat"])
+app.include_router(audio.router, prefix="/api/v1/audio", tags=["Voz"])
 
 
 # ---------------------------------------------------------------------------
