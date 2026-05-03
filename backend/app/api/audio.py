@@ -2,11 +2,9 @@
 app/api/audio.py — Endpoints de voz para o projeto Memórias Vivas.
 
 Endpoints:
-    POST /api/v1/audio/transcrever   → STT: áudio → texto (Whisper Large V3)
-
-Epic 5.1 — Speech-to-Text com Whisper Large V3 (Groq)
-Epic 5.2 — Text-to-Speech (a implementar)
-Epic 5.3 — WebSocket em tempo real (a implementar)
+    POST /api/v1/audio/transcrever   → STT: áudio → texto (Whisper Large V3) [Epic 5.1]
+    POST /api/v1/audio/sintetizar    → TTS: texto → áudio MP3 (edge-tts Neural) [Epic 5.2]
+    GET  /api/v1/audio/vozes         → lista de vozes PT-PT disponíveis
 """
 
 from __future__ import annotations
@@ -15,6 +13,7 @@ import logging
 import os
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
 from app.services.whisper_service import (
@@ -22,6 +21,12 @@ from app.services.whisper_service import (
     FORMATOS_SUPORTADOS,
     MAX_AUDIO_BYTES,
     transcrever,
+)
+from app.services.tts_service import (
+    VOZ_PADRAO,
+    VOZES_DISPONIVEIS,
+    sintetizar,
+    sintetizar_streaming,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,14 +45,26 @@ class TranscricaoResponse(BaseModel):
     tamanho_bytes: int
 
 
+class SintetizarInput(BaseModel):
+    texto: str
+    voz: str = VOZ_PADRAO
+    streaming: bool = False
+
+
+class VozInfo(BaseModel):
+    id: str
+    nome_completo: str
+    genero: str
+
+
 # ---------------------------------------------------------------------------
-# POST /transcrever
+# POST /transcrever  (Epic 5.1)
 # ---------------------------------------------------------------------------
 
 @router.post(
     "/transcrever",
     response_model=TranscricaoResponse,
-    summary="Transcrever áudio para texto (Whisper Large V3)",
+    summary="STT — Transcrever áudio para texto (Whisper Large V3)",
 )
 async def transcrever_audio(
     audio: UploadFile = File(
@@ -56,29 +73,17 @@ async def transcrever_audio(
     ),
     prompt_hint: str | None = Form(
         default=None,
-        description=(
-            "Contexto opcional para melhorar precisão "
-            "(ex: nome do utilizador, tema da conversa)."
-        ),
+        description="Contexto opcional para melhorar precisão (ex: nome do utilizador, tema).",
     ),
 ):
     """
-    Transcreve um ficheiro de áudio para texto em PT-PT usando o Whisper Large V3 da Groq.
+    Transcreve áudio para texto em PT-PT usando Whisper Large V3 da Groq.
 
-    Aceita uploads multipart/form-data com o campo `audio`.
-    O campo `prompt_hint` é opcional e melhora a precisão em nomes e termos específicos.
-
-    **Como testar no Postman:**
-    - Method: POST
-    - Body: form-data
-    - Key `audio` (tipo File): selecionar ficheiro de áudio
-    - Key `prompt_hint` (tipo Text, opcional): ex. "Manuel Silva, Évora, carpinteiro"
-
-    **Limites:**
-    - Tamanho máximo: 25 MB
-    - Formatos: mp3, wav, webm, ogg, flac, m4a, mp4, mpeg
+    **Testar no Postman:**
+    - Body → form-data
+    - `audio` (File): ficheiro de áudio
+    - `prompt_hint` (Text, opcional): ex. "Manuel Silva, Évora, carpinteiro"
     """
-    # Validar extensão / content-type
     filename = audio.filename or "audio.webm"
     extensao = os.path.splitext(filename)[1].lower()
     content_type = (audio.content_type or "").lower()
@@ -86,9 +91,8 @@ async def transcrever_audio(
     formato_valido = (
         content_type in FORMATOS_SUPORTADOS
         or extensao in EXTENSOES_SUPORTADAS
-        or content_type == "application/octet-stream"  # browsers genéricos
+        or content_type == "application/octet-stream"
     )
-
     if not formato_valido:
         raise HTTPException(
             status_code=415,
@@ -98,7 +102,6 @@ async def transcrever_audio(
             ),
         )
 
-    # Ler bytes
     audio_bytes = await audio.read()
 
     if len(audio_bytes) > MAX_AUDIO_BYTES:
@@ -106,16 +109,9 @@ async def transcrever_audio(
             status_code=413,
             detail=f"Ficheiro demasiado grande: {len(audio_bytes)/1024/1024:.1f} MB (máximo: 25 MB).",
         )
-
     if len(audio_bytes) == 0:
         raise HTTPException(status_code=400, detail="Ficheiro de áudio vazio.")
 
-    logger.info(
-        "STT request | ficheiro=%s | content_type=%s | tamanho=%.1f KB | hint=%s",
-        filename, content_type, len(audio_bytes) / 1024, prompt_hint,
-    )
-
-    # Transcrever
     try:
         resultado = transcrever(
             audio_bytes=audio_bytes,
@@ -134,3 +130,96 @@ async def transcrever_audio(
         idioma=resultado.idioma,
         tamanho_bytes=len(audio_bytes),
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /sintetizar  (Epic 5.2)
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/sintetizar",
+    summary="TTS — Sintetizar texto para áudio MP3 (edge-tts Neural PT-PT)",
+    responses={
+        200: {
+            "content": {"audio/mpeg": {}},
+            "description": "Ficheiro MP3 com a voz sintetizada.",
+        }
+    },
+)
+async def sintetizar_texto(payload: SintetizarInput):
+    """
+    Converte texto em áudio MP3 em PT-PT usando vozes neurais (edge-tts).
+
+    - Voz padrão: `pt-PT-RaquelNeural` (feminina, clara)
+    - Voz alternativa: `pt-PT-DuarteNeural` (masculina, pausada)
+    - `streaming: true` → devolve áudio em chunks (menor latência percebida)
+    - `streaming: false` → devolve MP3 completo de uma vez
+
+    **Testar no Postman:**
+    - Body → raw JSON
+    - Resultado: ficheiro MP3 — clicar em "Send and Download"
+    """
+    if not payload.texto.strip():
+        raise HTTPException(status_code=400, detail="Texto vazio.")
+
+    if len(payload.texto) > 5000:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Texto demasiado longo: {len(payload.texto)} caracteres (máximo: 5000).",
+        )
+
+    logger.info(
+        "TTS request | voz=%s | chars=%d | streaming=%s",
+        payload.voz, len(payload.texto), payload.streaming,
+    )
+
+    headers = {
+        "Content-Disposition": 'attachment; filename="resposta.mp3"',
+        "X-Voz": payload.voz,
+    }
+
+    if payload.streaming:
+        # Streaming — envia chunks à medida que são gerados
+        async def _audio_stream():
+            try:
+                async for chunk in sintetizar_streaming(payload.texto, payload.voz):
+                    yield chunk
+            except RuntimeError as exc:
+                logger.error("Erro TTS streaming: %s", exc)
+
+        return StreamingResponse(
+            _audio_stream(),
+            media_type="audio/mpeg",
+            headers=headers,
+        )
+
+    # Resposta completa
+    try:
+        audio_bytes = await sintetizar(payload.texto, payload.voz)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    return Response(
+        content=audio_bytes,
+        media_type="audio/mpeg",
+        headers={**headers, "Content-Length": str(len(audio_bytes))},
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /vozes
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/vozes",
+    response_model=list[VozInfo],
+    summary="Listar vozes PT-PT disponíveis",
+)
+async def listar_vozes():
+    """Devolve as vozes PT-PT disponíveis para TTS."""
+    return [
+        VozInfo(id="raquel", nome_completo="pt-PT-RaquelNeural", genero="feminino"),
+        VozInfo(id="duarte", nome_completo="pt-PT-DuarteNeural", genero="masculino"),
+    ]
