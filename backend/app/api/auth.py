@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
 from app.models.utilizador import RoleEnum, Utilizador
+from app.services import profile_service
 from app.services.auth_service import (
     criar_access_token,
     criar_refresh_token,
@@ -150,6 +151,13 @@ async def _enviar_email_reset(email: str, token: str, nome: str | None) -> None:
     except Exception as exc:
         # Falha de email não deve expor informação ao cliente
         logger.exception("Falha ao enviar email de reset: %s", exc)
+
+
+
+class PerfilResponse(BaseModel):
+    perfil_json: dict | None = Field(default=None)
+    temas_explorados: list[str] = Field(default=[])
+    atualizado_em: datetime | None = Field(default=None)
 
 
 # ---------------------------------------------------------------------------
@@ -387,6 +395,31 @@ async def me(
         is_active=current_user.is_active,
         onboarding_completo=current_user.onboarding_completo,
         criado_em=current_user.criado_em,
+    )
+
+
+
+# ---------------------------------------------------------------------------
+# GET /perfil
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/perfil",
+    response_model=PerfilResponse,
+    summary="Perfil biográfico do utilizador autenticado",
+)
+async def get_perfil(
+    current_user: Utilizador = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Devolve o perfil biográfico extraído pelo Groq/Gemini."""
+    perfil_db = await profile_service.get_profile(str(current_user.id), db)
+    if perfil_db is None:
+        return PerfilResponse()
+    return PerfilResponse(
+        perfil_json=perfil_db.perfil_json,
+        temas_explorados=list(perfil_db.temas_explorados or []),
+        atualizado_em=perfil_db.atualizado_em,
     )
 
 
