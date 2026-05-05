@@ -4,7 +4,47 @@
  * Ícones SVG inline limpos para microfone e temas.
  */
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
+
+// ---------------------------------------------------------------------------
+// Hook — efeito de máquina de escrever
+// Acumula texto num buffer e exibe a ~15 chars/seg (ritmo da fala humana)
+// ---------------------------------------------------------------------------
+function useTypewriter() {
+  const timerRef    = useRef(null);
+  const onUpdateRef = useRef(null);
+  const onDoneRef   = useRef(null);
+
+  // Inicia o typewriter com texto completo e duração alvo em ms
+  const iniciarComAudio = (textoCompleto, duracaoMs, onUpdate, onDone) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    onUpdateRef.current = onUpdate;
+    onDoneRef.current   = onDone;
+
+    const total   = textoCompleto.length;
+    if (total === 0) { onDone?.(); return; }
+
+    // Margem de 150ms para o texto terminar ligeiramente antes do áudio
+    const tickMs  = Math.max(16, (duracaoMs - 150) / total);
+    let   pos     = 0;
+
+    timerRef.current = setInterval(() => {
+      pos += 1;
+      onUpdateRef.current?.(textoCompleto.slice(0, pos));
+      if (pos >= total) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+        onDoneRef.current?.();
+      }
+    }, tickMs);
+  };
+
+  const parar = () => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  };
+
+  return { iniciarComAudio, parar };
+}
 import ProfileScreen from "./ProfileScreen";
 import { useAuth } from "../contexts/AuthContext";
 import { TokenStorage, chatApi, BASE_URL } from "../api/client";
@@ -71,13 +111,6 @@ function Bolha({ role, texto, streaming }) {
           : "bg-white text-[#1a1a2e] rounded-3xl rounded-bl-sm border border-[#e8e0d5] shadow-sm",
       ].join(" ")} style={{ fontFamily: "'Lora', serif" }}>
         {texto}
-        {streaming && (
-          <span className="inline-flex gap-1 ml-2">
-            <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-            <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-            <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-          </span>
-        )}
       </div>
       {isUser && (
         <div className="w-8 h-8 rounded-full bg-[#e8e0d5] flex items-center justify-center ml-3 flex-shrink-0 mt-1">
@@ -139,7 +172,9 @@ export default function DashboardScreen() {
   const mediaRecRef    = useRef(null);
   const audioChunksRef = useRef([]);
   const audioQueueRef  = useRef([]);
-  const anchorRef      = useRef(null);
+  const anchorRef        = useRef(null);
+  const textoCompletoRef = useRef("");     // texto acumulado até o áudio arrancar
+  const typewriter     = useTypewriter();
 
   const ligarWS = useCallback((t) => {
     if (wsRef.current) wsRef.current.close();
@@ -159,14 +194,25 @@ export default function DashboardScreen() {
       const msg = JSON.parse(event.data);
       if (msg.type === "pronto")      { setSessionId(msg.session_id); }
       if (msg.type === "transcricao") { setMensagens(p => [...p, { role: "user", texto: msg.texto }]); }
-      if (msg.type === "resposta")    {
+      if (msg.type === "resposta_inicio") {
         if (msg.session_id) setSessionId(msg.session_id);
-        setMensagens(p => [...p, { role: "assistant", texto: msg.texto, streaming: true }]);
+        // Cria bolha vazia — typewriter arranca quando o áudio começar
+        setMensagens(p => [...p, { role: "assistant", texto: "", streaming: true }]);
+        textoCompletoRef.current = "";
+      }
+      if (msg.type === "resposta_chunk") {
+        // Acumular texto completo para usar quando o áudio arrancar
+        textoCompletoRef.current += msg.chunk;
+      }
+      if (msg.type === "resposta_fim") {
+        // Guardar texto final — typewriter arranca no audio_fim
+        textoCompletoRef.current = msg.texto;
       }
       if (msg.type === "audio_inicio") { audioQueueRef.current = []; }
       if (msg.type === "audio_fim") {
-        setMensagens(p => p.map((m, i) => i === p.length - 1 ? { ...m, streaming: false } : m));
-        reproduzirAudio(); setMicEstado("idle");
+        // Áudio e texto sincronizam — audio_fim chega quando TTS terminou de gerar
+        reproduzirAudio();
+        setMicEstado("idle");
       }
       if (msg.type === "pedir_repeticao") { reproduzirAudio(); setMicEstado("idle"); }
       if (msg.type === "erro") { setErro(msg.mensagem); setMicEstado("idle"); }
@@ -183,7 +229,32 @@ export default function DashboardScreen() {
     const buf = new Uint8Array(total);
     let off = 0;
     for (const c of q) { buf.set(new Uint8Array(c), off); off += c.byteLength; }
-    new Audio(URL.createObjectURL(new Blob([buf], { type: "audio/mpeg" }))).play();
+    const blob  = new Blob([buf], { type: "audio/mpeg" });
+    const url   = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    const texto = textoCompletoRef.current;
+
+    audio.addEventListener("loadedmetadata", () => {
+      const duracaoMs = audio.duration * 1000;
+      // Texto e áudio arrancam juntos — typewriter calculado para terminarem ao mesmo tempo
+      typewriter.iniciarComAudio(
+        texto,
+        duracaoMs,
+        (textoVisivel) => {
+          setMensagens(p => p.map((m, i) =>
+            i === p.length - 1 ? { ...m, texto: textoVisivel } : m
+          ));
+        },
+        () => {
+          setMensagens(p => p.map((m, i) =>
+            i === p.length - 1 ? { ...m, streaming: false } : m
+          ));
+        }
+      );
+      audio.play();
+    });
+
+    audio.load();
   };
 
   const handleMic = async () => {
@@ -229,6 +300,7 @@ export default function DashboardScreen() {
     <ProfileScreen
       onVoltar={() => setMostrarPerfil(false)}
       onLogout={logout}
+      utilizadorInicial={utilizador}
     />
   );
 

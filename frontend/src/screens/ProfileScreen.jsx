@@ -56,12 +56,26 @@ const IconChevron = ({ open }) => (
 // Componente — Linha de perfil
 // ---------------------------------------------------------------------------
 
+function formatarValor(v) {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "boolean") return v ? "Sim" : "Não";
+  if (Array.isArray(v)) return v.join(", ");
+  if (typeof v === "object") {
+    return Object.entries(v)
+      .filter(([, val]) => val !== null && val !== undefined)
+      .map(([k, val]) => `${k.replace(/_/g, " ")}: ${Array.isArray(val) ? val.join(", ") : val}`)
+      .join(" · ");
+  }
+  return String(v);
+}
+
 function LinhaPerfilBio({ label, valor }) {
-  if (!valor) return null;
+  const texto = formatarValor(valor);
+  if (!texto) return null;
   return (
     <div className="py-5 border-b border-[#f0ebe3] last:border-0">
       <p className="text-[#aaa] text-sm tracking-widest uppercase mb-1">{label}</p>
-      <p className="text-[#1a1a2e] text-xl leading-relaxed">{valor}</p>
+      <p className="text-[#1a1a2e] text-xl leading-relaxed">{texto}</p>
     </div>
   );
 }
@@ -97,8 +111,8 @@ function Seccao({ titulo, children, defaultOpen = false }) {
 // Ecrã principal
 // ---------------------------------------------------------------------------
 
-export default function ProfileScreen({ onVoltar, onLogout }) {
-  const [utilizador, setUtilizador] = useState(null);
+export default function ProfileScreen({ onVoltar, onLogout, utilizadorInicial }) {
+  const [utilizador, setUtilizador] = useState(utilizadorInicial || null);
   const [perfil, setPerfil]         = useState(null);
   const [loading, setLoading]       = useState(true);
   const [erro, setErro]             = useState("");
@@ -118,9 +132,11 @@ export default function ProfileScreen({ onVoltar, onLogout }) {
     const carregar = async () => {
       setLoading(true);
       try {
-        // Dados do utilizador
-        const user = await authApi.me();
-        setUtilizador(user);
+        // Usar dados do utilizador já disponíveis — evita re-fetch desnecessário
+        if (!utilizadorInicial) {
+          const user = await authApi.me();
+          setUtilizador(user);
+        }
 
         // Perfil biográfico
         const res = await fetch(
@@ -236,7 +252,9 @@ export default function ProfileScreen({ onVoltar, onLogout }) {
               <LinhaPerfilBio label="Profissão"         valor={bio.profissao} />
               <LinhaPerfilBio label="Memória marcante"  valor={bio.memoria_marcante} />
               {bio.outros && Object.entries(bio.outros).map(([k, v]) =>
-                v ? <LinhaPerfilBio key={k} label={k.replace(/_/g, " ")} valor={String(v)} /> : null
+                v !== null && v !== undefined
+                  ? <LinhaPerfilBio key={k} label={k.replace(/_/g, " ")} valor={v} />
+                  : null
               )}
             </div>
           )}

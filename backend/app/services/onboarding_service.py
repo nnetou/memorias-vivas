@@ -1,156 +1,192 @@
 """
-onboarding_service.py — Fluxo de onboarding para o primeiro acesso do idoso.
+onboarding_service.py — Onboarding conversacional conduzido pelo Groq.
 
-Responsabilidades:
-    1. Definir as 5 perguntas fixas de onboarding
-    2. Determinar qual a próxima pergunta a fazer (com base no historico)
-    3. Detectar quando o onboarding está completo (todas respondidas)
-    4. Extrair o perfil biográfico JSON usando Gemini 2.5 Flash
+Abordagem:
+    Em vez de 5 perguntas fixas, o Groq conduz uma conversa natural
+    com o idoso, recolhendo as informações necessárias ao perfil.
+
+    O modelo decide:
+      - Como formular cada pergunta (calorosa, em PT-PT)
+      - Quando usar o nome e pronome correto (Sr./Sra.)
+      - Se a resposta faz sentido no contexto (validação implícita)
+      - Quando tem informação suficiente para encerrar
+
+    Quando o Groq considera o onboarding completo, devolve a tag
+    especial [ONBOARDING_COMPLETO] no início da mensagem.
+    O backend deteta esta tag e extrai o perfil.
+
+Informação a recolher (não tem de seguir esta ordem):
+    - Nome completo e idade aproximada
+    - Localidade onde vive (Portugal ou região)
+    - Família (filhos, netos, estado civil)
+    - Profissão ou ocupação principal
+    - Uma memória ou momento marcante da vida
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 
 from groq import Groq
-
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Cliente Groq para extração (substitui Gemini em modo de teste)
+# Cliente Groq
 # ---------------------------------------------------------------------------
-_groq_client: Groq | None = None
+
+_client: Groq | None = None
 
 def _get_groq() -> Groq:
-    global _groq_client
-    if _groq_client is None:
-        _groq_client = Groq(api_key=settings.GROQ_API_KEY)
-    return _groq_client
-
-# ---------------------------------------------------------------------------
-# Perguntas fixas de onboarding (apresentadas apenas na 1.ª sessão)
-# ---------------------------------------------------------------------------
-PERGUNTAS_ONBOARDING: list[str] = [
-    "Como se chama e onde nasceu?",
-    "Tem filhos ou netos? Conte-me da sua família.",
-    "A que se dedicou a maior parte da sua vida?",
-    "Viveu sempre na mesma terra ou mudou-se?",
-    "Qual o momento da sua vida que mais gosta de recordar?",
-]
-
-# ---------------------------------------------------------------------------
-# Mensagem de abertura (antes da 1.ª pergunta)
-# ---------------------------------------------------------------------------
-BOAS_VINDAS = (
-    "Olá! Sou o Memórias Vivas, o seu assistente de conversação. "
-    "Antes de começarmos, gostava de o/a conhecer um pouco melhor. "
-    "Vou fazer-lhe algumas perguntas curtas. Fique à vontade para responder "
-    "como quiser — não há respostas certas ou erradas. Está pronto/a?"
-)
+    global _client
+    if _client is None:
+        _client = Groq(api_key=settings.GROQ_API_KEY)
+    return _client
 
 
 # ---------------------------------------------------------------------------
-# Funções auxiliares
+# System prompt do onboarding conversacional
+# ---------------------------------------------------------------------------
+
+SYSTEM_ONBOARDING = """\
+És o assistente do projeto Memórias Vivas. O teu papel é conhecer o idoso \
+através de uma conversa calorosa e natural, em Português de Portugal (PT-PT).
+
+OBJETIVO: Recolher as seguintes informações ao longo da conversa:
+  1. Nome completo e idade aproximada
+  2. Localidade onde vive (deve ser em Portugal — se disser outro país, \
+pede gentilmente para confirmar, pois esta aplicação é para pessoas em Portugal)
+  3. Família (filhos, netos, estado civil)
+  4. Profissão ou ocupação principal (atual ou passada)
+  5. Uma memória ou momento marcante da vida
+
+REGRAS OBRIGATÓRIAS:
+- Começa sempre com uma saudação calorosa e apresenta-te brevemente.
+- Faz SEMPRE apenas UMA pergunta de cada vez.
+- Após a primeira resposta, identifica o nome e o género (Sr./Sra.) e usa-os \
+em todas as mensagens seguintes.
+- Se uma resposta não fizer sentido no contexto português (ex: diz que vive \
+na China, que tem 200 anos, resposta completamente incoerente), pede \
+gentilmente para confirmar ou repetir, sem ser condescendente.
+- Se uma resposta for muito vaga (ex: "não sei", "tanto faz"), aceita e avança \
+— não insistas.
+- Usa linguagem simples, frases curtas e tom paciente e caloroso.
+- Quando tiveres recolhido informação suficiente sobre os 5 pontos \
+(mesmo que incompleta), termina a conversa com uma frase calorosa de \
+agradecimento.
+- Quando terminares, coloca EXATAMENTE no início da tua mensagem a tag: \
+[ONBOARDING_COMPLETO]
+- Nunca uses emojis.
+- Fala sempre em PT-PT. Evita expressões do Brasil.
+"""
+
+# Máximo de trocas antes de forçar o encerramento
+MAX_TROCAS = 14
+
+
+# ---------------------------------------------------------------------------
+# Funções públicas
 # ---------------------------------------------------------------------------
 
 def get_boas_vindas() -> str:
-    """Devolve a mensagem de boas-vindas para o 1.º acesso."""
-    return BOAS_VINDAS
+    """Primeira mensagem do assistente — gerada pelo Groq."""
+    resposta = _get_groq().chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": SYSTEM_ONBOARDING},
+            {"role": "user",   "content": "Olá"},
+        ],
+        temperature=0.7,
+        max_tokens=200,
+    )
+    return resposta.choices[0].message.content.strip()
 
 
-def get_next_question(historico: list[dict]) -> str | None:
+def proxima_mensagem(historico: list[dict]) -> str:
     """
-    Devolve a próxima pergunta de onboarding que ainda não foi colocada.
-
-    Args:
-        historico: Lista de mensagens [{role, content}, ...] da sessão de onboarding.
-
-    Returns:
-        Próxima pergunta (str) ou None se todas já foram feitas.
+    Dada a conversa até agora, o Groq gera a próxima mensagem do assistente.
+    Pode ser uma pergunta ou, quando tiver informação suficiente,
+    uma mensagem de conclusão com [ONBOARDING_COMPLETO].
     """
-    # Conta quantas perguntas do assistente já estão no histórico
-    perguntas_feitas = [
-        msg["content"]
-        for msg in historico
-        if msg.get("role") == "assistant"
-        and msg.get("content") in PERGUNTAS_ONBOARDING
-    ]
-    feitas_set = set(perguntas_feitas)
+    # Forçar encerramento se demasiadas trocas
+    mensagens = [{"role": "system", "content": SYSTEM_ONBOARDING}]
 
-    for pergunta in PERGUNTAS_ONBOARDING:
-        if pergunta not in feitas_set:
-            return pergunta
+    n_trocas = sum(1 for m in historico if m["role"] == "user")
+    if n_trocas >= MAX_TROCAS:
+        mensagens.append({
+            "role": "system",
+            "content": "Já recolheste informação suficiente. Encerra agora com [ONBOARDING_COMPLETO]."
+        })
 
-    return None  # todas as perguntas já foram feitas
+    mensagens.extend(historico)
+
+    resposta = _get_groq().chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=mensagens,
+        temperature=0.7,
+        max_tokens=300,
+    )
+    return resposta.choices[0].message.content.strip()
 
 
-def is_onboarding_complete(historico: list[dict]) -> bool:
-    """
-    Retorna True quando todas as perguntas de onboarding foram feitas
-    E o utilizador respondeu à última.
-    """
-    perguntas_feitas = [
-        msg["content"]
-        for msg in historico
-        if msg.get("role") == "assistant"
-        and msg.get("content") in PERGUNTAS_ONBOARDING
-    ]
-    todas_feitas = all(p in set(perguntas_feitas) for p in PERGUNTAS_ONBOARDING)
+def is_onboarding_complete(mensagem_assistente: str) -> bool:
+    """Verifica se a mensagem contém a tag de conclusão."""
+    return "[ONBOARDING_COMPLETO]" in mensagem_assistente
 
-    if not todas_feitas:
-        return False
 
-    # Garante que há uma resposta do utilizador após a última pergunta do assistente
-    ultima_msg = historico[-1] if historico else {}
-    return ultima_msg.get("role") == "user"
+def limpar_tag(mensagem: str) -> str:
+    """Remove a tag [ONBOARDING_COMPLETO] da mensagem para mostrar ao utilizador."""
+    return mensagem.replace("[ONBOARDING_COMPLETO]", "").strip()
 
 
 # ---------------------------------------------------------------------------
-# Extração de perfil com Gemini 2.5 Flash
+# Extração de perfil — Groq com schema JSON
 # ---------------------------------------------------------------------------
 
-_EXTRACTION_PROMPT = """
-Analisa a conversa de onboarding abaixo e extrai o perfil biográfico do idoso em JSON.
+_EXTRACTION_PROMPT = """\
+Analisa a conversa de onboarding abaixo e extrai o perfil biográfico em JSON.
 Devolve APENAS o JSON, sem explicações, sem markdown.
 
-Schema obrigatório (preenche com o que foi mencionado, usa null se não disponível):
+Schema (usa null se não disponível):
 {{
-  "nome": "string ou null",
-  "terra_natal": "string ou null",
-  "familia": "string descritiva ou null",
-  "profissao": "string ou null",
-  "memoria_marcante": "string ou null",
+  "nome": null,
+  "terra_natal": null,
+  "familia": null,
+  "profissao": null,
+  "memoria_marcante": null,
   "outros": {{}}
 }}
 
-Conversa de onboarding:
+Conversa:
 {conversa}
 """
+
+_EMPTY_PROFILE = {
+    "nome": None, "terra_natal": None, "familia": None,
+    "profissao": None, "memoria_marcante": None, "outros": {},
+}
 
 
 async def extract_profile_with_gemini(historico: list[dict]) -> dict:
     """
-    Extrai o perfil biográfico JSON da conversa de onboarding via Groq/Llama.
-    (Substituição do Gemini para testes — evita quotas e problemas de modelo.)
+    Extrai o perfil biográfico JSON da conversa de onboarding via Groq.
+    (Mantém o nome da função por compatibilidade com o chat.py existente.)
     """
-    conversa_texto = "\n".join(
-        f"{'Assistente' if msg['role'] == 'assistant' else 'Idoso'}: {msg['content']}"
-        for msg in historico
+    import asyncio
+
+    conversa = "\n".join(
+        f"{'Assistente' if m['role'] == 'assistant' else 'Idoso'}: {m['content']}"
+        for m in historico
+        if isinstance(m, dict) and "role" in m and "content" in m
     )
 
-    prompt = _EXTRACTION_PROMPT.format(conversa=conversa_texto)
+    prompt = _EXTRACTION_PROMPT.format(conversa=conversa)
 
-    _EMPTY = {
-        "nome": None, "terra_natal": None, "familia": None,
-        "profissao": None, "memoria_marcante": None, "outros": {},
-    }
-
+    loop = asyncio.get_event_loop()
     try:
-        import asyncio
-        loop = asyncio.get_event_loop()
         resposta = await loop.run_in_executor(
             None,
             lambda: _get_groq().chat.completions.create(
@@ -160,8 +196,7 @@ async def extract_profile_with_gemini(historico: list[dict]) -> dict:
                         "role": "system",
                         "content": (
                             "És um extractor de perfis biográficos. "
-                            "Respondes APENAS com JSON válido, sem texto adicional nem blocos de código. "
-                            "Segue exatamente o schema pedido."
+                            "Respondes APENAS com JSON válido, sem texto adicional nem blocos de código."
                         ),
                     },
                     {"role": "user", "content": prompt},
@@ -171,18 +206,18 @@ async def extract_profile_with_gemini(historico: list[dict]) -> dict:
             ),
         )
         raw = resposta.choices[0].message.content.strip()
-        # Limpar possíveis blocos de código que o modelo inclua
+        # Limpar blocos de código se existirem
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
         perfil = json.loads(raw.strip())
-        logger.info("Groq extraiu perfil com sucesso: %s", list(perfil.keys()))
+        logger.info("Perfil extraído: %s", list(perfil.keys()))
         return perfil
 
     except json.JSONDecodeError as exc:
-        logger.error("Groq devolveu JSON inválido na extração: %s", exc)
-        return _EMPTY
+        logger.error("JSON inválido na extração: %s", exc)
+        return _EMPTY_PROFILE
     except Exception as exc:
-        logger.error("Erro ao chamar Groq para extração de perfil: %s", exc)
+        logger.error("Erro na extração de perfil: %s", exc)
         raise

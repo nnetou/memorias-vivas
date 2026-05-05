@@ -231,47 +231,63 @@ async def ws_conversa(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
                     f" | corrigido='{texto_para_groq[:80]}'" if resultado_filtro.foi_corrigido else "",
                 )
 
-                # ── 2. Groq ───────────────────────────────────────────────
+                # ── 2. Groq (streaming) ──────────────────────────────────
                 historico = await get_historico(session_id)
                 perfil_db = await profile_service.get_profile(user_id, db)
 
                 try:
-                    loop = asyncio.get_event_loop()
+                    temas_anteriores = []
                     if perfil_db:
                         temas_anteriores = await profile_service.get_temas_explorados(
                             user_id, db
                         )
-                        resultado_groq = await loop.run_in_executor(
-                            None,
-                            lambda: groq_service.conversa_personalizada(
-                                mensagem=texto_para_groq,
-                                tema=tema,
-                                perfil_json=perfil_db.perfil_json,
-                                temas_anteriores=temas_anteriores,
-                                historico=historico,
-                            ),
+
+                    # Escolher o gerador de stream correto
+                    if perfil_db:
+                        stream_gen = groq_service.conversa_personalizada_stream(
+                            mensagem=texto_para_groq,
+                            tema=tema,
+                            perfil_json=perfil_db.perfil_json,
+                            temas_anteriores=temas_anteriores,
+                            historico=historico,
                         )
                     else:
-                        resultado_groq = await loop.run_in_executor(
-                            None,
-                            lambda: groq_service.chat(
-                                mensagem=texto_para_groq,
-                                historico=historico,
-                                tema=tema,
-                            ),
+                        stream_gen = groq_service.chat_stream(
+                            mensagem=texto_para_groq,
+                            historico=historico,
+                            tema=tema,
                         )
+
+                    # Notifica o frontend que vai começar a receber texto
+                    await _enviar_json(websocket, {
+                        "type": "resposta_inicio",
+                        "session_id": session_id,
+                    })
+
+                    # Stream do texto — cada chunk enviado imediatamente ao frontend
+                    chunks_texto: list[str] = []
+                    loop = asyncio.get_event_loop()
+
+                    async def _consumir_stream():
+                        for chunk in stream_gen:
+                            chunks_texto.append(chunk)
+                            await _enviar_json(websocket, {
+                                "type": "resposta_chunk",
+                                "chunk": chunk,
+                            })
+
+                    await _consumir_stream()
+                    texto_assistente = "".join(chunks_texto)
+
+                    await _enviar_json(websocket, {
+                        "type": "resposta_fim",
+                        "texto": texto_assistente,
+                        "session_id": session_id,
+                    })
+
                 except Exception as exc:
                     await _pedir_repeticao(websocket, "ia", voz, exc)
                     continue
-
-                texto_assistente = resultado_groq["resposta"]
-
-                await _enviar_json(websocket, {
-                    "type": "resposta",
-                    "texto": texto_assistente,
-                    "session_id": session_id,
-                    "ttft_ms": resultado_groq.get("ttft_ms"),
-                })
 
                 # Persiste no Redis
                 await append_interacao(session_id, texto_para_groq, texto_assistente)
@@ -283,7 +299,6 @@ async def ws_conversa(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
                     async for chunk in sintetizar_streaming(texto_assistente, voz):
                         await websocket.send_bytes(chunk)
                 except Exception as exc:
-                    # TTS falhou a meio — pede repetição mas o texto já foi enviado
                     logger.error("WS TTS falhou: %s", exc)
                     tts_ok = False
                 finally:

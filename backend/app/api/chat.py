@@ -258,9 +258,19 @@ async def onboarding_endpoint(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Onboarding stateless — o frontend é o dono do histórico.
-    Necessário para enviar o histórico completo ao Gemini no final.
+    Onboarding conversacional — o Groq conduz a conversa naturalmente.
+    O frontend gere o historico_atualizado entre chamadas (stateless).
+
+    Fluxo:
+      1. Frontend chama com mensagem="" e historico=[] para iniciar.
+      2. Backend pede ao Groq a primeira mensagem (boas-vindas + 1ª pergunta).
+      3. Frontend envia resposta do utilizador → backend passa ao Groq.
+      4. Groq gera próxima pergunta, validando a resposta anterior.
+      5. Quando Groq decide que tem info suficiente, inclui [ONBOARDING_COMPLETO].
+      6. Backend deteta a tag, extrai o perfil e persiste no PostgreSQL.
     """
+    import asyncio
+
     historico = list(payload.historico)
 
     ja_feito = await profile_service.is_onboarding_done(payload.user_id, db)
@@ -270,14 +280,37 @@ async def onboarding_endpoint(
             detail="Onboarding já concluído. Use /conversa/personalizada.",
         )
 
+    # Adicionar resposta do utilizador ao histórico
     if payload.mensagem.strip():
         historico.append({"role": "user", "content": payload.mensagem.strip()})
 
-    if onboarding_service.is_onboarding_complete(historico):
+    # Gerar próxima mensagem do assistente via Groq
+    loop = asyncio.get_event_loop()
+    try:
+        if not historico:
+            # Primeira chamada — boas-vindas
+            msg_assistente = await loop.run_in_executor(
+                None, onboarding_service.get_boas_vindas
+            )
+        else:
+            # Chamadas seguintes — próxima mensagem contextual
+            hist_para_groq = historico
+            msg_assistente = await loop.run_in_executor(
+                None, lambda: onboarding_service.proxima_mensagem(hist_para_groq)
+            )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Erro Groq: {exc}")
+
+    # Verificar se o onboarding está completo
+    if onboarding_service.is_onboarding_complete(msg_assistente):
+        msg_limpa = onboarding_service.limpar_tag(msg_assistente)
+        historico.append({"role": "assistant", "content": msg_limpa})
+
+        # Extrair perfil e persistir
         try:
             perfil = await onboarding_service.extract_profile_with_gemini(historico)
         except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Erro Gemini: {exc}")
+            raise HTTPException(status_code=502, detail=f"Erro extração: {exc}")
 
         nome = (perfil or {}).get("nome")
         await profile_service.save_profile(
@@ -292,26 +325,16 @@ async def onboarding_endpoint(
             db=db,
         )
         return OnboardingResponse(
-            pergunta=None,
+            pergunta=msg_limpa,
             onboarding_completo=True,
             perfil_extraido=perfil,
             historico_atualizado=historico,
         )
 
-    proxima_pergunta = onboarding_service.get_next_question(historico)
-    if proxima_pergunta is None:
-        return OnboardingResponse(
-            pergunta=None,
-            onboarding_completo=False,
-            historico_atualizado=historico,
-        )
-
-    if not historico:
-        historico.append({"role": "assistant", "content": onboarding_service.get_boas_vindas()})
-
-    historico.append({"role": "assistant", "content": proxima_pergunta})
+    # Adicionar mensagem ao histórico e devolver
+    historico.append({"role": "assistant", "content": msg_assistente})
     return OnboardingResponse(
-        pergunta=proxima_pergunta,
+        pergunta=msg_assistente,
         onboarding_completo=False,
         historico_atualizado=historico,
     )
