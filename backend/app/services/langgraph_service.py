@@ -84,29 +84,48 @@ Responde APENAS com JSON, sem texto extra:
 
 
 # ---------------------------------------------------------------------------
-# Nó de Merge (síncrono — corre em executor)
+# Nó de Merge — Gemini 2.5 Flash (com fallback para Groq)
 # ---------------------------------------------------------------------------
 
 def _merge_perfil(estado: EstadoMerge) -> dict[str, Any]:
     """
     Nó LangGraph: chama o Gemini 2.5 Flash para fundir os dois perfis.
-    Em caso de falha, faz fallback para o perfil_antigo intacto.
+    Em caso de falha do Gemini, faz fallback para Groq.
+    Em caso de falha total, devolve o perfil_antigo intacto.
     """
     perfil_antigo = estado.get("perfil_antigo")
     resumo_sessao = estado.get("resumo_sessao", "")
 
-    perfil_antigo_str = (
-        json.dumps(perfil_antigo, ensure_ascii=False, indent=2)
-        if perfil_antigo
-        else "null"
-    )
-
-    prompt = _MERGE_PROMPT.format(
-        perfil_antigo=perfil_antigo_str,
-        resumo_sessao=resumo_sessao,
-    )
-
+    # ── Tentativa 1: Gemini 2.5 Flash ────────────────────────────────────────
     try:
+        from app.services.gemini_service import _fundir_perfis_sync
+
+        perfil_antigo_str = (
+            json.dumps(perfil_antigo, ensure_ascii=False, indent=2)
+            if perfil_antigo
+            else "null (primeira sessão)"
+        )
+
+        perfil_fundido = _fundir_perfis_sync(perfil_antigo_str, resumo_sessao)
+        logger.info("Merge concluído via Gemini 2.5 Flash.")
+        return {"perfil_fundido": perfil_fundido, "erro": None}
+
+    except Exception as exc_gemini:
+        logger.warning("Merge Gemini falhou (%s) — a usar Groq como fallback.", exc_gemini)
+
+    # ── Tentativa 2: Groq (Llama 3.3 70B) ────────────────────────────────────
+    try:
+        perfil_antigo_str = (
+            json.dumps(perfil_antigo, ensure_ascii=False, indent=2)
+            if perfil_antigo
+            else "null"
+        )
+
+        prompt = _MERGE_PROMPT.format(
+            perfil_antigo=perfil_antigo_str,
+            resumo_sessao=resumo_sessao,
+        )
+
         resposta = _get_groq().chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
@@ -133,15 +152,16 @@ def _merge_perfil(estado: EstadoMerge) -> dict[str, Any]:
         if "outros" not in perfil_fundido:
             perfil_fundido["outros"] = {}
 
-        logger.info("Merge concluído com sucesso via Groq.")
+        logger.info("Merge concluído via Groq (fallback).")
         return {"perfil_fundido": perfil_fundido, "erro": None}
 
-    except Exception as exc:
-        logger.exception("Erro no nó merge_perfil: %s", exc)
+    except Exception as exc_groq:
+        logger.exception("Merge Groq (fallback) também falhou: %s", exc_groq)
         return {
             "perfil_fundido": perfil_antigo,
-            "erro": str(exc),
+            "erro": str(exc_groq),
         }
+
 
 
 # ---------------------------------------------------------------------------

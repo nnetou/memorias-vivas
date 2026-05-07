@@ -143,10 +143,44 @@ def limpar_tag(mensagem: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Extração de perfil — Groq com schema JSON
+# Extração de perfil — Gemini 2.5 Flash (Epic 3.2)
 # ---------------------------------------------------------------------------
 
-_EXTRACTION_PROMPT = """\
+async def extract_profile_with_gemini(historico: list[dict]) -> dict:
+    """
+    Extrai o perfil biográfico rico da conversa de onboarding via Gemini 2.5 Flash.
+
+    Usa o gemini_service que aplica response_mime_type="application/json" para
+    garantir JSON válido. O schema rico inclui pessoas, locais, datas, eventos,
+    tradições e expressões regionais (Epic 3.1).
+
+    Em caso de falha do Gemini, faz fallback para extração via Groq.
+
+    Args:
+        historico: Lista de mensagens {"role": str, "content": str}.
+
+    Returns:
+        Dict com o perfil biográfico (schema rico compatível com o simples).
+    """
+    from app.services.gemini_service import extrair_perfil as _gemini_extrair
+
+    # Tentativa principal: Gemini 2.5 Flash
+    try:
+        logger.info("Extração de perfil via Gemini 2.5 Flash...")
+        perfil = await _gemini_extrair(historico)
+        logger.info("Perfil extraído pelo Gemini | campos: %s", list(perfil.keys()))
+        return perfil
+
+    except Exception as exc:
+        logger.warning(
+            "Gemini indisponível (%s) — a usar Groq como fallback para extração.",
+            exc,
+        )
+
+    # Fallback: Groq (Llama 3.3 70B) com schema simplificado
+    import asyncio
+
+    _EXTRACTION_PROMPT = """\
 Analisa a conversa de onboarding abaixo e extrai o perfil biográfico em JSON.
 Devolve APENAS o JSON, sem explicações, sem markdown.
 
@@ -163,27 +197,11 @@ Schema (usa null se não disponível):
 Conversa:
 {conversa}
 """
-
-_EMPTY_PROFILE = {
-    "nome": None, "terra_natal": None, "familia": None,
-    "profissao": None, "memoria_marcante": None, "outros": {},
-}
-
-
-async def extract_profile_with_gemini(historico: list[dict]) -> dict:
-    """
-    Extrai o perfil biográfico JSON da conversa de onboarding via Groq.
-    (Mantém o nome da função por compatibilidade com o chat.py existente.)
-    """
-    import asyncio
-
     conversa = "\n".join(
         f"{'Assistente' if m['role'] == 'assistant' else 'Idoso'}: {m['content']}"
         for m in historico
         if isinstance(m, dict) and "role" in m and "content" in m
     )
-
-    prompt = _EXTRACTION_PROMPT.format(conversa=conversa)
 
     loop = asyncio.get_event_loop()
     try:
@@ -199,25 +217,30 @@ async def extract_profile_with_gemini(historico: list[dict]) -> dict:
                             "Respondes APENAS com JSON válido, sem texto adicional nem blocos de código."
                         ),
                     },
-                    {"role": "user", "content": prompt},
+                    {"role": "user", "content": _EXTRACTION_PROMPT.format(conversa=conversa)},
                 ],
                 temperature=0.1,
                 max_tokens=512,
             ),
         )
         raw = resposta.choices[0].message.content.strip()
-        # Limpar blocos de código se existirem
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
         perfil = json.loads(raw.strip())
-        logger.info("Perfil extraído: %s", list(perfil.keys()))
+        logger.info("Perfil extraído (fallback Groq): %s", list(perfil.keys()))
         return perfil
 
     except json.JSONDecodeError as exc:
-        logger.error("JSON inválido na extração: %s", exc)
-        return _EMPTY_PROFILE
+        logger.error("Fallback Groq | JSON inválido na extração: %s", exc)
+        return {
+            "nome": None, "terra_natal": None, "familia": None,
+            "profissao": None, "memoria_marcante": None,
+            "pessoas": [], "locais": [], "datas_aproximadas": [],
+            "eventos_marcantes": [], "tradicoes": [], "expressoes_regionais": [],
+            "momentos_chave": [], "resumo_narrativo": None, "outros": {},
+        }
     except Exception as exc:
-        logger.error("Erro na extração de perfil: %s", exc)
+        logger.error("Fallback Groq | Erro na extração de perfil: %s", exc)
         raise

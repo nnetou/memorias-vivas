@@ -156,6 +156,10 @@ class EncerrarSessaoResponse(BaseModel):
     user_id: str
     perfil_atualizado: bool
     mensagem: str
+    resumo_narrativo: str | None = Field(
+        default=None,
+        description="Resumo narrativo da sessão gerado pelo Gemini (1-2 parágrafos, PT-PT).",
+    )
     erro: str | None = Field(default=None)
 
 
@@ -468,22 +472,43 @@ async def encerrar_sessao(
     usa Redis — pois o Redis pode ter expirado.
     """
     erro: str | None = None
+    resumo_narrativo: str | None = None
 
-    # 1. Gemini extrai novos factos da sessão
-    try:
-        novos_factos = await onboarding_service.extract_profile_with_gemini(
-            payload.historico_sessao
-        )
-        resumo_sessao_str = json.dumps(novos_factos or {}, ensure_ascii=False)
-    except Exception as exc:
-        logger.warning("Extração Gemini falhou para user=%s: %s", payload.user_id, exc)
-        # Fallback: usa o histórico como texto simples
+    # 1. Gemini extrai novos factos da sessão + resumo narrativo em paralelo
+    from app.services import gemini_service
+    import asyncio
+
+    async def _extrair_factos() -> dict:
+        try:
+            return await onboarding_service.extract_profile_with_gemini(
+                payload.historico_sessao
+            )
+        except Exception as exc:
+            logger.warning("Extração de factos falhou para user=%s: %s", payload.user_id, exc)
+            return {}
+
+    async def _extrair_resumo() -> str:
+        try:
+            return await gemini_service.gerar_resumo_narrativo(payload.historico_sessao)
+        except Exception as exc:
+            logger.warning("Resumo narrativo falhou para user=%s: %s", payload.user_id, exc)
+            return ""
+
+    # Corre extração e resumo em paralelo (ambos são chamadas à API Gemini)
+    novos_factos, resumo_narrativo = await asyncio.gather(
+        _extrair_factos(),
+        _extrair_resumo(),
+    )
+
+    resumo_sessao_str = json.dumps(novos_factos or {}, ensure_ascii=False)
+    if not novos_factos:
+        # Fallback: usa o histórico como texto simples para o merge
         resumo_sessao_str = "\n".join(
             f"{m.get('role','?').upper()}: {m.get('content','')}"
             for m in payload.historico_sessao
             if isinstance(m, dict)
         )
-        erro = f"Extração Gemini: {exc}"
+        erro = "Extração de factos retornou vazio"
 
     # 2. Carrega perfil atual e executa merge via LangGraph
     perfil_db = await profile_service.get_profile(payload.user_id, db)
@@ -525,5 +550,6 @@ async def encerrar_sessao(
         user_id=payload.user_id,
         perfil_atualizado=perfil_atualizado,
         mensagem="Sessão encerrada e perfil atualizado." if perfil_atualizado else "Sessão encerrada com erros.",
+        resumo_narrativo=resumo_narrativo or None,
         erro=erro,
     )
