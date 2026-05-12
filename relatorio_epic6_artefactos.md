@@ -50,3 +50,8 @@ Ao longo do desenvolvimento e testes de integração end-to-end, foram identific
 - **Sintoma**: Textos massivos e ricos proferidos pelo utilizador eram processados no chat, mas no final, a sessão ficava registada com o `resumo_sessao` vazio na base de dados (e logo, não constava no livro).
 - **Causa**: O uso repetitivo excedeu a quota gratuita (Free Tier) do Google Gemini 2.5 Flash, devolvendo um erro `429 RESOURCE_EXHAUSTED`. A função de extração de resumos silenciava o erro e devolvia uma string vazia `""`.
 - **Resolução**: Implementou-se um sistema robusto de fallback multi-modelo no `gemini_service.py` (`_resumo_groq_fallback`). Sempre que o Gemini atinge o limite ou falha (ex: timeout, 429), o sistema faz uma comutação fluída para a API do Groq (usando o modelo *Llama 3.3 70B*), garantindo que as memórias nunca são perdidas devido a exaustão de quota de um serviço de terceiros.
+
+### Impasse 7: Falha na Geração de Vídeo (`No module named 'moviepy.editor'`)
+- **Sintoma**: Ao tentar gerar o "Vídeo Ilustrativo" no Portfólio, o backend lançava a exceção `ModuleNotFoundError` quebrando todo o processo de renderização e devolvendo erro 500.
+- **Causa**: O ficheiro `requirements.txt` estava definido com `moviepy>=1.0.3`. Aquando do *build* da imagem Docker, o sistema descarregou automaticamente a versão recente `2.2.1` da biblioteca MoviePy, na qual o submódulo `moviepy.editor` foi completamente descontinuado e removido.
+- **Resolução**: A dependência no `requirements.txt` foi redefinida com "pinning" rigoroso para `moviepy==1.0.3`. O contentor da API foi atualizado em "hot-swap" desinstalando a versão problemática e reinstalando a versão exata que suporta a arquitetura de processamento de áudio/vídeo concebida para este projeto.
