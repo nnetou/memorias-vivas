@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <title>Livro de Memórias — {{ nome }}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400;1,500&family=Lora:ital,wght@0,400;0,500;1,400&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: #FDFBF7;
+      color: #1a1a2e;
+      font-size: 13pt;
+      line-height: 1.8;
+    }
+
+    /* ── Capa ─────────────────────────────────────────────────────────── */
+    .capa {
+      page: capa;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+      padding: 80px 60px;
+      background: #1e3a5f;
+      color: #FAF7F2;
+    }
+
+    .capa .ornamento {
+      width: 60px;
+      height: 2px;
+      background: #c9a84c;
+      margin: 0 auto 48px;
+    }
+
+    .capa h1 {
+      font-family: 'Cormorant Garamond', 'Georgia', serif;
+      font-size: 42pt;
+      font-weight: 300;
+      letter-spacing: 2px;
+      color: #FAF7F2;
+      margin-bottom: 24px;
+    }
+
+    .capa .subtitulo {
+      font-size: 16pt;
+      color: #c9a84c;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      font-weight: 400;
+      margin-bottom: 16px;
+    }
+
+    .capa .nome {
+      font-family: 'Cormorant Garamond', 'Georgia', serif;
+      font-size: 28pt;
+      font-weight: 400;
+      font-style: italic;
+      color: #a8c4e0;
+      margin-bottom: 60px;
+    }
+
+    .capa .data-geracao {
+      font-size: 10pt;
+      color: #5a7a9a;
+      letter-spacing: 2px;
+    }
+
+    .capa .ai-label {
+      margin-top: 20px;
+      font-size: 9pt;
+      color: #4a6a8a;
+      letter-spacing: 1px;
+    }
+
+    /* ── Páginas de conteúdo ──────────────────────────────────────────── */
+    @page {
+      size: A4;
+      margin: 30mm 25mm 30mm 25mm;
+
+      @bottom-center {
+        content: "Memórias Vivas · Gerado por IA · " string(titulo-capitulo);
+        font-family: 'Lora', serif;
+        font-size: 8pt;
+        color: #aaa;
+        letter-spacing: 1px;
+      }
+
+      @bottom-right {
+        content: counter(page);
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 10pt;
+        color: #c9a84c;
+      }
+    }
+
+    @page capa {
+      margin: 0;
+      @bottom-center { content: none; }
+      @bottom-right { content: none; }
+    }
+
+    /* ── Separador de capítulo ────────────────────────────────────────── */
+    .capitulo {
+      page-break-before: always;
+    }
+
+    .capitulo:first-child {
+      page-break-before: auto;
+    }
+
+    .capitulo-header {
+      margin-bottom: 40px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #e8e0d5;
+    }
+
+    .capitulo-tema-tag {
+      font-size: 8pt;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: #c9a84c;
+      margin-bottom: 12px;
+      display: block;
+    }
+
+    .capitulo-titulo {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 28pt;
+      font-weight: 400;
+      color: #1e3a5f;
+      line-height: 1.2;
+      string-set: titulo-capitulo content();
+    }
+
+    .ornamento-capitulo {
+      width: 40px;
+      height: 2px;
+      background: #c9a84c;
+      margin-top: 16px;
+    }
+
+    /* ── Resumo narrativo ─────────────────────────────────────────────── */
+    .resumo-narrativo {
+      background: #F5F0E8;
+      border-left: 3px solid #c9a84c;
+      padding: 24px 28px;
+      margin: 32px 0;
+      border-radius: 0 4px 4px 0;
+    }
+
+    .resumo-narrativo p {
+      font-style: italic;
+      color: #3a3a5e;
+      font-size: 12pt;
+      line-height: 1.9;
+    }
+
+    /* ── Factos biográficos ───────────────────────────────────────────── */
+    .factos-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin: 32px 0;
+    }
+
+    .facto {
+      padding: 16px 0;
+      border-bottom: 1px solid #f0ebe3;
+    }
+
+    .facto-label {
+      font-size: 8pt;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #aaa;
+      margin-bottom: 6px;
+    }
+
+    .facto-valor {
+      font-size: 12pt;
+      color: #1a1a2e;
+    }
+
+    /* ── Listas (pessoas, locais, eventos) ───────────────────────────── */
+    .lista-memorias {
+      list-style: none;
+      margin: 20px 0;
+    }
+
+    .lista-memorias li {
+      padding: 10px 0;
+      border-bottom: 1px solid #f0ebe3;
+      font-size: 12pt;
+      color: #2a2a4e;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .lista-memorias li::before {
+      content: "·";
+      color: #c9a84c;
+      position: absolute;
+      left: 0;
+      font-size: 16pt;
+      line-height: 1;
+      top: 8px;
+    }
+
+    /* ── Secção dentro de capítulo ────────────────────────────────────── */
+    .seccao-titulo {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 14pt;
+      font-weight: 500;
+      color: #1e3a5f;
+      letter-spacing: 1px;
+      margin: 32px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e8e0d5;
+    }
+
+    /* ── Rodapé da capa ──────────────────────────────────────────────── */
+    .capa-rodape {
+      position: absolute;
+      bottom: 40px;
+      left: 0;
+      right: 0;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       CAPA
+  ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="capa">
+    <div class="ornamento"></div>
+    <div class="subtitulo">Livro de Memórias</div>
+    <h1>Memórias Vivas</h1>
+    <div class="nome">{{ nome }}</div>
+    <div class="ornamento"></div>
+    <div class="data-geracao" style="margin-top:40px;">{{ data_geracao }}</div>
+    <div class="ai-label">Gerado por Inteligência Artificial · Memórias Vivas</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       PERFIL BIOGRÁFICO
+  ═══════════════════════════════════════════════════════════════════════ -->
+  <div class="capitulo">
+    <div class="capitulo-header">
+      <span class="capitulo-tema-tag">Introdução</span>
+      <h2 class="capitulo-titulo">Quem é {{ nome }}</h2>
+      <div class="ornamento-capitulo"></div>
+    </div>
+
+    {% if resumo_narrativo %}
+    <div class="resumo-narrativo">
+      <p>{{ resumo_narrativo }}</p>
+    </div>
+    {% endif %}
+
+    <div class="factos-grid">
+      {% if terra_natal %}
+      <div class="facto">
+        <div class="facto-label">Terra natal</div>
+        <div class="facto-valor">{{ terra_natal }}</div>
+      </div>
+      {% endif %}
+      {% if profissao %}
+      <div class="facto">
+        <div class="facto-label">Profissão</div>
+        <div class="facto-valor">{{ profissao }}</div>
+      </div>
+      {% endif %}
+      {% if familia %}
+      <div class="facto">
+        <div class="facto-label">Família</div>
+        <div class="facto-valor">{{ familia }}</div>
+      </div>
+      {% endif %}
+      {% if memoria_marcante %}
+      <div class="facto">
+        <div class="facto-label">Memória marcante</div>
+        <div class="facto-valor">{{ memoria_marcante }}</div>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if pessoas %}
+    <h3 class="seccao-titulo">Pessoas mencionadas</h3>
+    <ul class="lista-memorias">
+      {% for p in pessoas %}<li>{{ p }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if locais %}
+    <h3 class="seccao-titulo">Lugares da vida</h3>
+    <ul class="lista-memorias">
+      {% for l in locais %}<li>{{ l }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       CAPÍTULOS POR TEMA (sessões)
+  ═══════════════════════════════════════════════════════════════════════ -->
+  {% for sessao in sessoes %}
+  {% if sessao.resumo %}
+  <div class="capitulo">
+    <div class="capitulo-header">
+      <span class="capitulo-tema-tag">{{ sessao.tema_label }}</span>
+      <h2 class="capitulo-titulo">{{ sessao.titulo }}</h2>
+      <div class="ornamento-capitulo"></div>
+    </div>
+
+    <div class="resumo-narrativo">
+      <p>{{ sessao.resumo }}</p>
+    </div>
+
+    {% if sessao.data %}
+    <p style="font-size:9pt; color:#aaa; margin-top:24px; letter-spacing:1px;">
+      Sessão de {{ sessao.data }}
+    </p>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% endfor %}
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       MOMENTOS E EVENTOS MARCANTES
+  ═══════════════════════════════════════════════════════════════════════ -->
+  {% if eventos_marcantes or momentos_chave %}
+  <div class="capitulo">
+    <div class="capitulo-header">
+      <span class="capitulo-tema-tag">Memória</span>
+      <h2 class="capitulo-titulo">Momentos que ficam</h2>
+      <div class="ornamento-capitulo"></div>
+    </div>
+
+    {% if eventos_marcantes %}
+    <h3 class="seccao-titulo">Eventos marcantes</h3>
+    <ul class="lista-memorias">
+      {% for e in eventos_marcantes %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if momentos_chave %}
+    <h3 class="seccao-titulo">Momentos-chave</h3>
+    <ul class="lista-memorias">
+      {% for m in momentos_chave %}<li>{{ m }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if tradicoes %}
+    <h3 class="seccao-titulo">Tradições e costumes</h3>
+    <ul class="lista-memorias">
+      {% for t in tradicoes %}<li>{{ t }}</li>{% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</body>
+</html>

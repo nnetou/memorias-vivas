@@ -27,3 +27,9 @@ passlib[bcrypt]>=1.7.4
 bcrypt==4.0.1
 python-jose[cryptography]>=3.3.0
 fastapi-mail>=1.4.1
+
+# Epic 6 — Geração de Portfólio
+weasyprint>=60.0               # PDF generation (no headless Chrome needed)
+moviepy>=1.0.3                 # Video generation (requires ffmpeg)
+pillow>=10.0.0                 # Image manipulation for video frames
+jinja2>=3.1.0                  # HTML templates for PDF

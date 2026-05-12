@@ -46,6 +46,7 @@ function useTypewriter() {
   return { iniciarComAudio, parar };
 }
 import ProfileScreen from "./ProfileScreen";
+import PortfolioScreen from "./PortfolioScreen";
 import { useAuth } from "../contexts/AuthContext";
 import { TokenStorage, chatApi, BASE_URL } from "../api/client";
 
@@ -167,6 +168,7 @@ export default function DashboardScreen() {
   const [erro, setErro]           = useState("");
   const [encerrada, setEncerrada] = useState(false);
   const [mostrarPerfil, setMostrarPerfil] = useState(false);
+  const [mostrarPortfolio, setMostrarPortfolio] = useState(false);
 
   const wsRef          = useRef(null);
   const mediaRecRef    = useRef(null);
@@ -295,12 +297,18 @@ export default function DashboardScreen() {
     setMicEstado("idle"); setEncerrada(false); setErro("");
   };
 
-  // ── Perfil ───────────────────────────────────────────────────────────────
   if (mostrarPerfil) return (
     <ProfileScreen
       onVoltar={() => setMostrarPerfil(false)}
       onLogout={logout}
       utilizadorInicial={utilizador}
+    />
+  );
+
+  // ── Portfólio ─────────────────────────────────────────────────────────────
+  if (mostrarPortfolio) return (
+    <PortfolioScreen
+      onVoltar={() => setMostrarPortfolio(false)}
     />
   );
 
@@ -339,6 +347,9 @@ export default function DashboardScreen() {
           <span className="text-[#7a9cbf] text-lg">
             {utilizador?.nome?.split(" ")[0]}
           </span>
+          <button onClick={() => setMostrarPortfolio(true)} className="text-[#7a9cbf] hover:text-white text-lg transition-colors tracking-wide">
+            Portfólio
+          </button>
           <button onClick={() => setMostrarPerfil(true)} className="text-[#7a9cbf] hover:text-white text-lg transition-colors tracking-wide">
             Perfil
           </button>

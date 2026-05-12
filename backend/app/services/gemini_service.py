@@ -299,6 +299,25 @@ def _gerar_resumo_sync(historico_texto: str) -> str:
     return resposta.text.strip()
 
 
+def _resumo_groq_fallback(historico_texto: str) -> str:
+    """Fallback: usa Groq (Llama 3) para gerar o resumo se o Gemini falhar (ex: 429)."""
+    from app.services.groq_service import _get_client
+    client = _get_client()
+    
+    mensagens = [
+        {"role": "system", "content": "És um escritor exímio. Escreve um resumo narrativo de 1 a 2 parágrafos em PT-PT com base na conversa, na 3ª pessoa, num tom caloroso e literário. Não uses listas nem emojis."},
+        {"role": "user", "content": f"CONVERSA:\n{historico_texto}"}
+    ]
+    
+    resposta = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=mensagens,
+        temperature=0.6,
+        max_tokens=1024,
+    )
+    return resposta.choices[0].message.content.strip()
+
+
 async def gerar_resumo_narrativo(historico: list[dict]) -> str:
     """
     Gera um resumo narrativo de 1-2 parágrafos da sessão em PT-PT.
@@ -311,7 +330,7 @@ async def gerar_resumo_narrativo(historico: list[dict]) -> str:
 
     Returns:
         String com o resumo narrativo em PT-PT.
-        Em caso de falha, devolve string vazia.
+        Em caso de falha de ambos os modelos, devolve string vazia.
     """
     if not historico:
         return ""
@@ -329,8 +348,14 @@ async def gerar_resumo_narrativo(historico: list[dict]) -> str:
         logger.info("Gemini resumo gerado | chars=%d", len(resumo))
         return resumo
     except Exception as exc:
-        logger.exception("Gemini | Erro ao gerar resumo narrativo: %s", exc)
-        return ""
+        logger.warning("Gemini falhou a gerar resumo (%s) — a usar Groq como fallback.", exc)
+        try:
+            resumo_groq = await loop.run_in_executor(None, _resumo_groq_fallback, historico_texto)
+            logger.info("Groq resumo gerado (fallback) | chars=%d", len(resumo_groq))
+            return resumo_groq
+        except Exception as groq_exc:
+            logger.exception("Groq fallback falhou ao gerar resumo: %s", groq_exc)
+            return ""
 
 
 # ---------------------------------------------------------------------------

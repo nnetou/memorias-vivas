@@ -66,6 +66,12 @@ export default function OnboardingScreen() {
       const audio = new Audio(audioUrl);
       let   pos   = 0;
 
+      const fallbackResolve = () => {
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        setMsgVisivel(texto);
+        resolve();
+      };
+
       const iniciarTypewriter = (duracaoMs) => {
         const total  = texto.length;
         const tickMs = total > 0 ? Math.max(16, (duracaoMs - 200) / total) : 50;
@@ -83,23 +89,19 @@ export default function OnboardingScreen() {
       // canplaythrough é mais fiável que loadedmetadata
       audio.addEventListener("canplaythrough", () => {
         const duracaoMs = (audio.duration || 5) * 1000;
-        audio.play().catch(() => {});
-        iniciarTypewriter(duracaoMs);
+        audio.play().then(() => {
+            iniciarTypewriter(duracaoMs);
+        }).catch(() => {
+            // Autoplay bloqueado pelo browser
+            fallbackResolve();
+        });
       }, { once: true });
 
-      audio.addEventListener("ended", () => {
-        // Garantir texto completo ao fim do áudio
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-        setMsgVisivel(texto);
-        resolve();
-      }, { once: true });
+      audio.addEventListener("ended", fallbackResolve, { once: true });
+      audio.addEventListener("error", fallbackResolve, { once: true });
 
-      audio.addEventListener("error", () => {
-        // Fallback sem áudio — mostrar texto completo
-        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-        setMsgVisivel(texto);
-        resolve();
-      }, { once: true });
+      // Timeout de segurança se canplaythrough nunca disparar
+      setTimeout(() => fallbackResolve(), 5000);
 
       audio.load();
     });

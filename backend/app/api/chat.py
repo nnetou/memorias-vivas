@@ -529,17 +529,31 @@ async def encerrar_sessao(
     perfil_atualizado = False
     if perfil_fundido:
         try:
+            # Passamos historico_onboarding=None para manter o original da BD
             await profile_service.save_profile(
                 user_id=payload.user_id,
                 perfil_json=perfil_fundido,
-                historico_onboarding=payload.historico_sessao,
+                historico_onboarding=None,
                 db=db,
             )
+            
+            # Guardar o registo da sessão para o Portfólio (Epic 6)
+            import uuid as _uuid
+            from app.models.utilizador import Sessao
+            
+            nova_sessao = Sessao(
+                utilizador_id=_uuid.UUID(payload.user_id),
+                session_id_redis=payload.session_id,
+                tema="geral",  # Por omissão, já que não temos o tema explícito no endpoint
+                resumo_sessao=resumo_narrativo,
+            )
+            db.add(nova_sessao)
+            
             await db.commit()   # garante persistência no PostgreSQL antes de limpar o Redis
             perfil_atualizado = True
-            logger.info("Perfil atualizado | user=%s", payload.user_id)
+            logger.info("Perfil atualizado e Sessão guardada | user=%s", payload.user_id)
         except Exception as exc:
-            logger.exception("Erro ao guardar perfil | user=%s", payload.user_id)
+            logger.exception("Erro ao guardar perfil ou sessão | user=%s", payload.user_id)
             erro = (erro or "") + f" | Save: {exc}"
 
     # 4. Limpa Redis

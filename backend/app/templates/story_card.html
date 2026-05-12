@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <title>Cartões de Histórias — {{ nome }}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400;1,500&family=Lora:ital,wght@0,400;1,400&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: #FDFBF7;
+    }
+
+    /* A5 landscape card */
+    @page {
+      size: A5 landscape;
+      margin: 0;
+    }
+
+    .card {
+      width: 210mm;
+      height: 148mm;
+      page-break-after: always;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Left decorative strip */
+    .card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 8mm;
+      background: #1e3a5f;
+    }
+
+    /* Gold accent bar */
+    .card::after {
+      content: '';
+      position: absolute;
+      left: 8mm;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: #c9a84c;
+    }
+
+    .card-inner {
+      margin-left: 14mm;
+      padding: 10mm 14mm 8mm 10mm;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    /* Header row */
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 6mm;
+    }
+
+    .card-meta {
+      flex: 1;
+    }
+
+    .card-tag {
+      font-size: 7pt;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #c9a84c;
+      margin-bottom: 3mm;
+      display: block;
+    }
+
+    .card-title {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 20pt;
+      font-weight: 400;
+      color: #1e3a5f;
+      line-height: 1.2;
+    }
+
+    .card-nome {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 12pt;
+      font-style: italic;
+      color: #7a9cbf;
+      margin-top: 2mm;
+    }
+
+    /* Divider */
+    .card-divider {
+      width: 30mm;
+      height: 1px;
+      background: #e8e0d5;
+      margin: 5mm 0;
+    }
+
+    /* Quote / resumo */
+    .card-quote {
+      flex: 1;
+      font-style: italic;
+      font-size: 11pt;
+      line-height: 1.75;
+      color: #2a2a4e;
+      border-left: 2px solid #c9a84c;
+      padding-left: 6mm;
+      overflow: hidden;
+    }
+
+    /* Facts row */
+    .card-facts {
+      display: flex;
+      gap: 8mm;
+      margin-top: 5mm;
+      padding-top: 4mm;
+      border-top: 1px solid #f0ebe3;
+    }
+
+    .card-fact {
+      flex: 1;
+    }
+
+    .card-fact-label {
+      font-size: 6.5pt;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #bbb;
+      margin-bottom: 2mm;
+    }
+
+    .card-fact-value {
+      font-size: 9pt;
+      color: #3a3a5e;
+      line-height: 1.4;
+    }
+
+    /* Footer */
+    .card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 4mm;
+    }
+
+    .card-footer-brand {
+      font-size: 7pt;
+      letter-spacing: 2px;
+      color: #bbb;
+      text-transform: uppercase;
+    }
+
+    .card-footer-date {
+      font-size: 7pt;
+      color: #ccc;
+    }
+
+    .card-badge {
+      font-size: 6pt;
+      color: #ddd;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      border: 1px solid #e8e0d5;
+      padding: 2px 6px;
+    }
+  </style>
+</head>
+<body>
+
+{% for cartao in cartoes %}
+<div class="card">
+  <div class="card-inner">
+    <div class="card-header">
+      <div class="card-meta">
+        <span class="card-tag">{{ cartao.tema_label }}</span>
+        <div class="card-title">A história de {{ nome }}</div>
+        <div class="card-nome">{{ nome }}</div>
+      </div>
+    </div>
+
+    <div class="card-divider"></div>
+
+    <div class="card-quote">
+      {{ cartao.resumo or "Uma história vivida com intensidade, guardada para sempre nestas páginas." }}
+    </div>
+
+    {% if cartao.facto_destaque %}
+    <div class="card-facts">
+      {% if cartao.facto_destaque.terra_natal %}
+      <div class="card-fact">
+        <div class="card-fact-label">Natural de</div>
+        <div class="card-fact-value">{{ cartao.facto_destaque.terra_natal }}</div>
+      </div>
+      {% endif %}
+      {% if cartao.facto_destaque.profissao %}
+      <div class="card-fact">
+        <div class="card-fact-label">Profissão</div>
+        <div class="card-fact-value">{{ cartao.facto_destaque.profissao }}</div>
+      </div>
+      {% endif %}
+      {% if cartao.facto_destaque.data %}
+      <div class="card-fact">
+        <div class="card-fact-label">Período</div>
+        <div class="card-fact-value">{{ cartao.facto_destaque.data }}</div>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="card-footer">
+      <span class="card-footer-brand">Memórias Vivas</span>
+      <span class="card-badge">Gerado por IA</span>
+      <span class="card-footer-date">{{ data_geracao }}</span>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+</body>
+</html>

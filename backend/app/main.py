@@ -18,7 +18,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api import chat, audio, ws, auth
+from app.api import chat, audio, ws, auth, artefactos
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +39,13 @@ async def lifespan(app: FastAPI):
         await init_db()
     else:
         logger.warning("DATABASE_URL não configurada — tabelas não criadas.")
+
+    # Media dir — artefactos Epic 6
+    import os
+    from pathlib import Path
+    media_root = Path(os.getenv("MEDIA_ROOT", "/app/media/artefactos"))
+    media_root.mkdir(parents=True, exist_ok=True)
+    logger.info("Diretório de artefactos: %s", media_root)
 
     # Redis — memória curta de sessão (Epic 4.1)
     if settings.REDIS_URL:
@@ -75,10 +82,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router,  prefix="/api/v1/auth",  tags=["Autenticação"])
-app.include_router(chat.router,  prefix="/api/v1/chat",  tags=["Chat"])
-app.include_router(audio.router, prefix="/api/v1/audio", tags=["Voz"])
-app.include_router(ws.router,    prefix="/api/v1/audio/ws", tags=["Voz — WebSocket"])
+app.include_router(auth.router,       prefix="/api/v1/auth",       tags=["Autenticação"])
+app.include_router(chat.router,       prefix="/api/v1/chat",       tags=["Chat"])
+app.include_router(audio.router,      prefix="/api/v1/audio",      tags=["Voz"])
+app.include_router(ws.router,         prefix="/api/v1/audio/ws",   tags=["Voz — WebSocket"])
+app.include_router(artefactos.router, prefix="/api/v1/artefactos", tags=["Portfólio"])
 
 
 # ---------------------------------------------------------------------------

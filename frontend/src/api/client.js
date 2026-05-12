@@ -206,4 +206,74 @@ export const chatApi = {
   },
 };
 
-export { BASE_URL, AUTH_URL, CHAT_URL };
+// ---------------------------------------------------------------------------
+// Artefactos endpoints (Epic 6)
+// ---------------------------------------------------------------------------
+
+const ARTEFACTOS_URL = `${BASE_URL}/api/v1/artefactos`;
+
+export const artefactosApi = {
+  listar: async () => {
+    const user_id = TokenStorage.getUserId();
+    const res = await apiFetch(`${ARTEFACTOS_URL}/?user_id=${user_id}`);
+    if (!res.ok) throw new Error("Erro ao listar artefactos.");
+    return res.json();
+  },
+
+  gerarLivro: async () => {
+    const user_id = TokenStorage.getUserId();
+    const res = await apiFetch(`${ARTEFACTOS_URL}/livro-memorias`, {
+      method: "POST",
+      body: JSON.stringify({ user_id }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Erro ao gerar livro.");
+    }
+    return res.json();
+  },
+
+  gerarTimeline: async () => {
+    const user_id = TokenStorage.getUserId();
+    const res = await apiFetch(`${ARTEFACTOS_URL}/timeline`, {
+      method: "POST",
+      body: JSON.stringify({ user_id }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Erro ao gerar timeline.");
+    }
+    return res.json();
+  },
+
+  gerarCartoes: async () => {
+    const user_id = TokenStorage.getUserId();
+    const res = await apiFetch(`${ARTEFACTOS_URL}/cartoes`, {
+      method: "POST",
+      body: JSON.stringify({ user_id }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Erro ao gerar cartões.");
+    }
+    return res.json();
+  },
+
+  gerarVideo: async () => {
+    const user_id = TokenStorage.getUserId();
+    const res = await apiFetch(`${ARTEFACTOS_URL}/video`, {
+      method: "POST",
+      body: JSON.stringify({ user_id }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || "Erro ao gerar vídeo.");
+    }
+    return res.json();
+  },
+
+  downloadUrl: (artefactoId) =>
+    `${ARTEFACTOS_URL}/${artefactoId}/download`,
+};
+
+export { BASE_URL, AUTH_URL, CHAT_URL, ARTEFACTOS_URL };

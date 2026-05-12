@@ -10,6 +10,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - media_data:/app/media/artefactos
     env_file:
       - ./backend/.env
     depends_on:
@@ -44,3 +45,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  media_data:
