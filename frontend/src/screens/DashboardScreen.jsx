@@ -286,6 +286,7 @@ export default function DashboardScreen() {
     try {
       await chatApi.encerrarSessao({
         session_id: sessionId,
+        tema: tema,
         historico_sessao: mensagens.map(m => ({ role: m.role, content: m.texto })),
       });
     } catch (e) { console.warn(e); }

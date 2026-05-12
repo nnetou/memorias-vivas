@@ -150,6 +150,10 @@ class EncerrarSessaoInput(BaseModel):
         ...,
         description="Histórico completo da sessão para extração Gemini.",
     )
+    tema: str = Field(
+        default="geral",
+        description="O tema discutido nesta sessão (ex: memorias, familia).",
+    )
 
 
 class EncerrarSessaoResponse(BaseModel):
@@ -544,10 +548,13 @@ async def encerrar_sessao(
             nova_sessao = Sessao(
                 utilizador_id=_uuid.UUID(payload.user_id),
                 session_id_redis=payload.session_id,
-                tema="geral",  # Por omissão, já que não temos o tema explícito no endpoint
+                tema=payload.tema,
                 resumo_sessao=resumo_narrativo,
             )
             db.add(nova_sessao)
+            
+            # Registar que este tema foi explorado
+            await profile_service.add_tema_explorado(payload.user_id, payload.tema, db)
             
             await db.commit()   # garante persistência no PostgreSQL antes de limpar o Redis
             perfil_atualizado = True

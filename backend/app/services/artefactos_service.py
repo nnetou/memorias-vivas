@@ -254,16 +254,17 @@ def _gerar_cartoes_pdf_sync(
     env = _jinja_env()
     tmpl = env.get_template("story_card.html")
 
-    temas_vistos: set[str] = set()
     cartoes = []
     for s in sessoes:
-        tema = s.get("tema", "geral")
-        if tema in temas_vistos:
+        resumo = s.get("resumo_sessao")
+        # Se a sessão não tiver resumo, não a incluímos nos cartões
+        if not resumo or not resumo.strip():
             continue
-        temas_vistos.add(tema)
+            
+        tema = s.get("tema", "geral")
         cartoes.append({
             "tema_label": TEMAS_LABELS.get(tema, tema),
-            "resumo": s.get("resumo_sessao") or p.get("resumo_narrativo") or "",
+            "resumo": resumo,
             "facto_destaque": {
                 "terra_natal": p["terra_natal"],
                 "profissao": p["profissao"],
