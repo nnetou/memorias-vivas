@@ -330,17 +330,17 @@ export default function OnboardingScreen() {
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Lora:wght@400;500;600&display=swap" rel="stylesheet" />
 
       {/* Header com progresso */}
-      <header className="app-header" style={{ flexDirection: "column", alignItems: "stretch", padding: "1rem 1.25rem 0" }}>
+      <header className="app-header" style={{ flexDirection: "column", alignItems: "stretch", paddingTop: "1rem", paddingBottom: "1rem", borderBottom: "none" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.875rem" }}>
           <div>
-            <span style={{ color: "white", fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)", fontWeight: 500 }}>
+            <span style={{ color: "var(--azul)", fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)", fontWeight: 600 }}>
               Memórias Vivas
             </span>
-            <div className="linha-dourada" style={{ width: "20px", marginTop: "3px" }} />
+            <div className="linha-dourada" style={{ width: "32px", marginTop: "2px" }} />
           </div>
           <button
             onClick={logout}
-            style={{ background: "none", border: "none", color: "var(--azul-claro)", fontSize: "var(--text-sm)", fontFamily: "var(--font-serif)", cursor: "pointer", padding: "0.5rem" }}
+            style={{ background: "none", border: "none", color: "var(--azul)", fontSize: "var(--text-sm)", fontFamily: "var(--font-serif)", cursor: "pointer", padding: "0.5rem" }}
           >
             Sair
           </button>

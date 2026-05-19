@@ -193,14 +193,14 @@ function EcraTemas({ utilizador, onEscolher }) {
       {/* Header */}
       <header className="app-header">
         <div>
-          <span style={{ color: "white", fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)", fontWeight: 500 }}>
+          <span style={{ color: "var(--azul)", fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)", fontWeight: 600 }}>
             Memórias Vivas
           </span>
-          <div className="linha-dourada" style={{ width: "24px", marginTop: "4px" }} />
+          <div className="linha-dourada" style={{ width: "32px", marginTop: "2px" }} />
         </div>
       </header>
 
-      <main style={{ flex: 1, padding: "1.75rem 1.25rem 1.5rem", overflowY: "auto" }} className="pb-nav">
+      <main style={{ flex: 1, paddingTop: "1.75rem", paddingLeft: "1.25rem", paddingRight: "1.25rem", overflowY: "auto" }} className="pb-nav">
         {/* Saudação */}
         <div style={{ marginBottom: "2rem" }} className="animate-slide-down">
           <p style={{ color: "var(--cinza)", fontSize: "var(--text-sm)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.25rem" }}>
@@ -289,6 +289,7 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
   const [sessionId, setSessionId] = useState(null);
   const [micEstado, setMicEstado] = useState("idle");
   const [erro, setErro]           = useState("");
+  const [isEncerrando, setIsEncerrando] = useState(false);
 
   const wsRef          = useRef(null);
   const mediaRecRef    = useRef(null);
@@ -403,6 +404,7 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
   };
 
   const encerrar = async () => {
+    setIsEncerrando(true);
     wsRef.current?.close();
     try {
       await chatApi.encerrarSessao({
@@ -411,6 +413,7 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
         historico_sessao: mensagens.map(m => ({ role: m.role, content: m.texto })),
       });
     } catch (e) { console.warn(e); }
+    setIsEncerrando(false);
     onEncerrada();
   };
 
@@ -428,12 +431,12 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
       {/* Header */}
       <header className="app-header" style={{ gap: "1rem" }}>
         <button onClick={onVoltar}
-          style={{ background: "none", border: "none", color: "var(--azul-claro)", cursor: "pointer", padding: "0.5rem", display: "flex" }}
+          style={{ background: "none", border: "none", color: "var(--azul)", cursor: "pointer", padding: "0.5rem", display: "flex", marginLeft: "-0.5rem" }}
           aria-label="Voltar à seleção de tema">
           <IconArrowLeft />
         </button>
         <div style={{ flex: 1 }}>
-          <p style={{ color: "white", fontFamily: "var(--font-serif)", fontSize: "var(--text-lg)", fontWeight: 600, margin: 0 }}>
+          <p style={{ color: "var(--azul)", fontFamily: "var(--font-serif)", fontSize: "var(--text-lg)", fontWeight: 600, margin: 0 }}>
             {temaAtual?.label || "Conversa"}
           </p>
           <div className="linha-dourada" style={{ width: "16px", marginTop: "3px" }} />
@@ -441,22 +444,34 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
         <button
           id="btn-terminar"
           onClick={encerrar}
+          disabled={isEncerrando}
           style={{
             background: "none",
-            border: "1.5px solid rgba(122,156,191,0.5)",
-            color: "var(--azul-claro)",
+            border: "1.5px solid var(--azul)",
+            color: "var(--azul)",
             borderRadius: "var(--radius-sm)",
             padding: "0.5rem 1rem",
             fontSize: "var(--text-sm)",
             fontFamily: "var(--font-serif)",
-            cursor: "pointer",
+            cursor: isEncerrando ? "wait" : "pointer",
             transition: "all 0.18s",
             minHeight: "var(--tap-min)",
+            opacity: isEncerrando ? 0.7 : 1,
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "white"; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--azul-claro)"; }}
+          onMouseEnter={e => { if (!isEncerrando) { e.currentTarget.style.background = "var(--azul)"; e.currentTarget.style.color = "white"; } }}
+          onMouseLeave={e => { if (!isEncerrando) { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--azul)"; } }}
         >
-          Terminar
+          {isEncerrando ? (
+            <>
+              <SpinnerIcon />
+              A guardar progresso...
+            </>
+          ) : (
+            "Terminar"
+          )}
         </button>
       </header>
 

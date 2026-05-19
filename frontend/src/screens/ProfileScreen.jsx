@@ -189,15 +189,15 @@ export default function ProfileScreen({ utilizadorInicial, onLogout }) {
       {/* Header */}
       <header className="app-header">
         <div>
-          <span style={{ color: "white", fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)", fontWeight: 500 }}>
+          <span style={{ color: "var(--azul)", fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)", fontWeight: 600 }}>
             O meu Perfil
           </span>
-          <div className="linha-dourada" style={{ width: "24px", marginTop: "4px" }} />
+          <div className="linha-dourada" style={{ width: "32px", marginTop: "2px" }} />
         </div>
       </header>
 
       {/* Conteúdo */}
-      <main style={{ flex: 1, padding: "1.5rem 1.25rem", overflowY: "auto" }} className="pb-nav">
+      <main style={{ flex: 1, paddingTop: "1.5rem", paddingLeft: "1.25rem", paddingRight: "1.25rem", overflowY: "auto" }} className="pb-nav">
 
         {/* Avatar + nome */}
         <div style={{
