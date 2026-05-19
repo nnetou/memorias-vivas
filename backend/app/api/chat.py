@@ -142,6 +142,7 @@ class ConversaPersonalizadaInput(BaseModel):
 
 class EncerrarSessaoInput(BaseModel):
     user_id: str = Field(..., description="UUID do utilizador.")
+    tema: str = Field(default="geral", description="Tema da sessão encerrada.")
     session_id: str | None = Field(
         default=None,
         description="ID Redis a limpar após encerramento.",
@@ -470,23 +471,30 @@ async def encerrar_sessao(
         1. Gemini extrai novos factos do historico_sessao.
         2. LangGraph faz merge: perfil_antigo (PostgreSQL) + novos_factos.
         3. Persiste o perfil consolidado no PostgreSQL.
-        4. Limpa o histórico Redis (se session_id fornecido).
+        4. Regista a Sessão individual na Base de Dados.
+        5. Limpa o histórico Redis (se session_id fornecido).
 
     O frontend deve sempre enviar historico_sessao completo — mesmo quando
     usa Redis — pois o Redis pode ter expirado.
     """
+    from app.models.utilizador import Sessao
+    import uuid
+
     erro: str | None = None
 
-    # 1. Gemini extrai novos factos da sessão
+    # 1. Gemini extrai novos factos da sessão e gera a história narrativa
     try:
+        from app.services import gemini_service
         novos_factos = await onboarding_service.extract_profile_with_gemini(
             payload.historico_sessao
         )
-        resumo_sessao_str = json.dumps(novos_factos or {}, ensure_ascii=False)
+        resumo_json_str = json.dumps(novos_factos or {}, ensure_ascii=False)
+        historia_narrativa = await gemini_service.gerar_resumo_narrativo(payload.historico_sessao)
     except Exception as exc:
         logger.warning("Extração Gemini falhou para user=%s: %s", payload.user_id, exc)
         # Fallback: usa o histórico como texto simples
-        resumo_sessao_str = "\n".join(
+        resumo_json_str = "{}"
+        historia_narrativa = "\n".join(
             f"{m.get('role','?').upper()}: {m.get('content','')}"
             for m in payload.historico_sessao
             if isinstance(m, dict)
@@ -501,7 +509,7 @@ async def encerrar_sessao(
         perfil_fundido = await executar_merge(
             user_id=payload.user_id,
             perfil_antigo=perfil_antigo,
-            resumo_sessao=resumo_sessao_str,
+            resumo_sessao=resumo_json_str,
         )
     except Exception as exc:
         logger.exception("Merge falhou para user=%s", payload.user_id)
@@ -518,14 +526,28 @@ async def encerrar_sessao(
                 historico_onboarding=payload.historico_sessao,
                 db=db,
             )
-            await db.commit()   # garante persistência no PostgreSQL antes de limpar o Redis
             perfil_atualizado = True
             logger.info("Perfil atualizado | user=%s", payload.user_id)
         except Exception as exc:
             logger.exception("Erro ao guardar perfil | user=%s", payload.user_id)
             erro = (erro or "") + f" | Save: {exc}"
 
-    # 4. Limpa Redis
+    # 4. Registar a sessão na tabela 'sessoes'
+    try:
+        nova_sessao = Sessao(
+            utilizador_id=uuid.UUID(payload.user_id),
+            session_id_redis=payload.session_id,
+            tema=payload.tema,
+            resumo_sessao=historia_narrativa,
+        )
+        db.add(nova_sessao)
+        await db.commit()
+    except Exception as exc:
+        logger.exception("Erro ao guardar registo de Sessao | user=%s", payload.user_id)
+        erro = (erro or "") + f" | Sessao Save: {exc}"
+        await db.rollback()
+
+    # 5. Limpa Redis
     if payload.session_id:
         await delete_historico(payload.session_id)
 

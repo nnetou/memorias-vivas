@@ -89,6 +89,7 @@ REGRAS DE CONVERSA:
 9.  VOCABULÁRIO PT-PT: "partilhar" (NUNCA "compartilhar") · "ótimo" (NUNCA "legal"/"bacana")
 10. ANTI-ALUCINAÇÃO: NÃO inventes rios, cidades ou factos históricos para criar empatia.
     Baseia-te APENAS no que o utilizador disse. Em dúvida, faz uma pergunta aberta.
+11. CONSTRUÇÃO DA LINHA TEMPORAL: Sempre que a pessoa contar uma história do passado, pergunta de forma natural que idade ela tinha na altura ou em que época isso aconteceu (caso ela ainda não tenha dito). Isto é essencial para catalogar as memórias no tempo.
 """
 
 
@@ -143,7 +144,9 @@ TEMAS: dict[str, str] = {
     "memorias": (
         f"Chamas-te Raquel. Estás a conduzir uma conversa sobre memórias e histórias de vida. "
         f"Faz perguntas abertas e calorosas sobre a infância, família, trabalho e "
-        f"momentos marcantes do utilizador. Valoriza cada recordação partilhada. {_BASE}"
+        f"momentos marcantes do utilizador. Valoriza cada recordação partilhada. "
+        f"Sempre que o utilizador contar uma história do passado, pergunta de forma natural que "
+        f"idade tinha na altura ou em que época isso aconteceu (caso ainda não tenha dito). {_BASE}"
     ),
     "saude": (
         f"Chamas-te Raquel. Estás a apoiar o utilizador em temas de bem-estar e saúde. "
