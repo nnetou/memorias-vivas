@@ -231,11 +231,11 @@ export const chatApi = {
     return res.json();
   },
 
-  encerrarSessao: async ({ session_id, historico_sessao }) => {
+  encerrarSessao: async ({ session_id, tema, historico_sessao }) => {
     const user_id = TokenStorage.getUserId();
     const res = await apiFetch(`${CHAT_URL}/sessao/encerrar`, {
       method: "POST",
-      body: JSON.stringify({ user_id, session_id, historico_sessao }),
+      body: JSON.stringify({ user_id, session_id, tema, historico_sessao }),
     });
     return res.json();
   },

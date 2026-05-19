@@ -146,16 +146,27 @@ def _gerar_timeline_html_sync(
 ) -> Path:
     p = _perfil_safe(perfil_json)
 
+    linha_temporal = p.get("linha_temporal") or []
     eventos: list[dict] = []
-    for ev in p["eventos_marcantes"]:
-        eventos.append({"tipo": "evento", "descricao": ev, "periodo": ""})
-    for mc in p["momentos_chave"]:
-        eventos.append({"tipo": "momento", "descricao": mc, "periodo": ""})
-    for i, da in enumerate(p["datas_aproximadas"]):
-        if i < len(eventos):
-            eventos[i]["periodo"] = da
-        else:
-            eventos.append({"tipo": "data", "descricao": da, "periodo": da})
+
+    if linha_temporal:
+        for item in linha_temporal:
+            # Suporta chaves "periodo" ou "data_ou_idade", e "acontecimento" ou "descricao"
+            periodo = item.get("periodo") or item.get("data_ou_idade") or ""
+            descricao = item.get("acontecimento") or item.get("descricao") or ""
+            if periodo or descricao:
+                eventos.append({"tipo": "evento", "descricao": descricao, "periodo": periodo})
+    else:
+        # Fallback para compatibilidade com perfis antigos sem linha_temporal estruturada
+        for ev in p.get("eventos_marcantes", []):
+            eventos.append({"tipo": "evento", "descricao": ev, "periodo": ""})
+        for mc in p.get("momentos_chave", []):
+            eventos.append({"tipo": "momento", "descricao": mc, "periodo": ""})
+        for i, da in enumerate(p.get("datas_aproximadas", [])):
+            if i < len(eventos):
+                eventos[i]["periodo"] = da
+            else:
+                eventos.append({"tipo": "data", "descricao": da, "periodo": da})
 
     items_html = ""
     for i, ev in enumerate(eventos):
@@ -423,7 +434,6 @@ def _gerar_video_sync(
         f"Memórias Vivas. As memórias de {nome}. "
         + (p["resumo_narrativo"] or "Uma vida rica em histórias e momentos únicos.")
     )
-    narration_text = narration_text[:500]  # limitar para TTS rápido
 
     tmp_audio = Path(tempfile.mktemp(suffix=".mp3"))
     try:

@@ -121,6 +121,7 @@ _PERFIL_VAZIO: dict[str, Any] = {
     "tradicoes": [],
     "expressoes_regionais": [],
     "momentos_chave": [],
+    "linha_temporal": [], # Array de {"periodo": str, "acontecimento": str}
     "resumo_narrativo": None,
     "outros": {},
 }
@@ -158,6 +159,12 @@ SCHEMA (devolve este objeto preenchido):
   "tradicoes": [],
   "expressoes_regionais": [],
   "momentos_chave": [],
+  "linha_temporal": [
+    {
+      "periodo": "Ex: 22 anos, 1975, ou infância",
+      "acontecimento": "Descrição factual do evento marcante"
+    }
+  ],
   "resumo_narrativo": null,
   "outros": {{}}
 }}
@@ -209,7 +216,7 @@ def _extrair_perfil_sync(historico_texto: str) -> dict:
     config = genai_types.GenerateContentConfig(
         response_mime_type="application/json",
         temperature=0.1,
-        max_output_tokens=2048,
+        max_output_tokens=8192,
     )
 
     resposta = _generate_with_fallback(prompt, config)
@@ -272,16 +279,17 @@ async def extrair_perfil(historico: list[dict]) -> dict:
 
 _PROMPT_RESUMO = """\
 Com base na conversa abaixo entre um assistente e um idoso português, \
-escreve um resumo narrativo de 1 a 2 parágrafos em Português de Portugal (PT-PT).
+escreve uma narrativa biográfica e factual detalhada e rica (sem limite de tamanho) em Português de Portugal (PT-PT).
 
-O resumo deve:
-- Ser escrito na 3ª pessoa, com tom caloroso e respeitoso.
-- Capturar os momentos e histórias mais marcantes partilhados.
-- Usar linguagem fluida e literária (adequada para um livro de memórias).
-- Não incluir informações que não foram mencionadas na conversa.
-- Não usar emojis nem listas — apenas prosa corrida.
+REGRA CRÍTICA DE TOM E ESTILO:
+- NUNCA escrevas em tom de conto de fadas, romance ficcional ou fábula (NÃO uses frases como "Era uma tarde quente", "Era uma vez", "O idoso sentou-se na sua cadeira", "Enquanto conversava com o assistente", etc.).
+- O tom deve ser puramente DOCUMENTAL, BIOGRÁFICO, REALISTA e RESPEITOSO.
+- Deve relatar diretamente os factos reais da vida da pessoa partilhados na conversa, usando a 3ª pessoa (ex: "Maria Silva recordou a sua infância em Chaves...", "Aos 22 anos, casou-se e mudou-se para França...").
+- Mantém o tom caloroso e empático, mas sempre baseado em FACTOS reais partilhados pelo idoso, sem inventar cenários poéticos ou ações físicas que não constam do diálogo (ex: suspirar, olhar pela janela, sentar-se na cadeira).
+- Captura todos os momentos, emoções e pormenores biográficos partilhados.
+- Não uses emojis nem listas — apenas prosa biográfica corrida.
 
-Responde APENAS com o texto do resumo, sem título nem introdução.
+Responde APENAS com a narrativa biográfica, sem título nem introdução.
 
 CONVERSA:
 {conversa}
@@ -293,7 +301,7 @@ def _gerar_resumo_sync(historico_texto: str) -> str:
     prompt = _PROMPT_RESUMO.format(conversa=historico_texto)
     config = genai_types.GenerateContentConfig(
         temperature=0.6,
-        max_output_tokens=1024,
+        max_output_tokens=8192,
     )
     resposta = _generate_with_fallback(prompt, config)
     return resposta.text.strip()
@@ -305,7 +313,7 @@ def _resumo_groq_fallback(historico_texto: str) -> str:
     client = _get_client()
     
     mensagens = [
-        {"role": "system", "content": "És um escritor exímio. Escreve um resumo narrativo de 1 a 2 parágrafos em PT-PT com base na conversa, na 3ª pessoa, num tom caloroso e literário. Não uses listas nem emojis."},
+        {"role": "system", "content": "És um escritor exímio. Escreve uma história biográfica rica e detalhada em PT-PT com base na conversa, na 3ª pessoa, num tom caloroso e literário, sem limite de tamanho. Não uses listas nem emojis."},
         {"role": "user", "content": f"CONVERSA:\n{historico_texto}"}
     ]
     
@@ -313,7 +321,7 @@ def _resumo_groq_fallback(historico_texto: str) -> str:
         model="llama-3.3-70b-versatile",
         messages=mensagens,
         temperature=0.6,
-        max_tokens=1024,
+        max_tokens=4096,
     )
     return resposta.choices[0].message.content.strip()
 
@@ -407,7 +415,7 @@ def _fundir_perfis_sync(perfil_antigo_str: str, novos_factos_str: str) -> dict:
     config = genai_types.GenerateContentConfig(
         response_mime_type="application/json",
         temperature=0.1,
-        max_output_tokens=2048,
+        max_output_tokens=8192,
     )
 
     resposta = _generate_with_fallback(prompt, config)

@@ -43,7 +43,22 @@ UTILIZADORES = [
         "nome":     "Ana Costa",
         "role":     RoleEnum.cuidador,
         "onboarding_completo": True,
-        "perfil": None,
+        "perfil": {
+            "nome":             "Ana Costa",
+            "terra_natal":      "Lisboa",
+            "familia":          "Casada, mãe de dois filhos.",
+            "profissao":        "Enfermeira e cuidadora de idosos.",
+            "memoria_marcante": "A primeira vez que ajudou a recuperar a memória de um utente.",
+            "linha_temporal": [
+                {"periodo": "18 anos", "acontecimento": "Entrou na Escola Superior de Enfermagem de Lisboa."},
+                {"periodo": "22 anos", "acontecimento": "Terminou a licenciatura e começou a trabalhar num hospital público."},
+                {"periodo": "28 anos", "acontecimento": "Casou-se e mudou-se para uma casa perto da praia."},
+                {"periodo": "35 anos", "acontecimento": "Decidiu focar-se inteiramente no cuidado de idosos e preservação de memórias."}
+            ],
+            "outros": {
+                "hobbies": "Fotografia documental, leitura de biografias."
+            }
+        },
     },
     {
         "email":    "manuel@memoriasvivas.pt",
@@ -57,6 +72,13 @@ UTILIZADORES = [
             "familia":          "Dois filhos: João e Ana. A Ana mora em Évora.",
             "profissao":        "Carpinteiro durante 40 anos, reformado há 5 anos.",
             "memoria_marcante": "O dia em que o filho João nasceu.",
+            "linha_temporal": [
+                {"periodo": "10 anos", "acontecimento": "Começou a ajudar o pai na oficina de carpintaria em Évora."},
+                {"periodo": "25 anos", "acontecimento": "Casou-se com a sua esposa Maria."},
+                {"periodo": "28 anos", "acontecimento": "Nascimento do seu primeiro filho, o João."},
+                {"periodo": "31 anos", "acontecimento": "Nascimento da sua filha Ana."},
+                {"periodo": "65 anos", "acontecimento": "Reformou-se após 40 anos dedicados à arte da carpintaria."}
+            ],
             "outros": {
                 "hobbies":      "Caminhadas pela Ribeira, jardinagem.",
                 "curiosidade":  "A filha Ana começou a aprender marcenaria.",
@@ -92,8 +114,27 @@ async def seed() -> None:
             existente = resultado.scalar_one_or_none()
 
             if existente:
-                logger.info("⏭  Já existe: %s", dados["email"])
-                ignorados += 1
+                logger.info("🔄  A atualizar: %s", dados["email"])
+                existente.nome = dados["nome"]
+                existente.role = dados["role"]
+                existente.onboarding_completo = dados["onboarding_completo"]
+
+                if dados["perfil"]:
+                    from sqlalchemy import select
+                    res_perfil = await db.execute(
+                        select(PerfilBiografico).where(PerfilBiografico.utilizador_id == existente.id)
+                    )
+                    perfil_existente = res_perfil.scalar_one_or_none()
+                    if perfil_existente:
+                        perfil_existente.perfil_json = dados["perfil"]
+                    else:
+                        perfil = PerfilBiografico(
+                            utilizador_id=existente.id,
+                            perfil_json=dados["perfil"],
+                            temas_explorados=["memorias", "familia"],
+                        )
+                        db.add(perfil)
+                criados += 1
                 continue
 
             # Criar utilizador
