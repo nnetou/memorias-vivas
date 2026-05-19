@@ -266,11 +266,11 @@ async def extrair_perfil(historico: list[dict]) -> dict:
 
     except json.JSONDecodeError as exc:
         logger.error("Gemini | JSON inválido na extração: %s", exc)
-        return dict(_PERFIL_VAZIO)
+        raise exc
 
     except Exception as exc:
         logger.exception("Gemini | Erro na extração de perfil: %s", exc)
-        return dict(_PERFIL_VAZIO)
+        raise exc
 
 
 # ---------------------------------------------------------------------------
@@ -476,3 +476,73 @@ async def fundir_perfis(
     except Exception as exc:
         logger.exception("Gemini merge | Erro: %s", exc)
         return perfil_antigo or dict(_PERFIL_VAZIO)
+
+
+def _resumir_cartao_sync(resumo_sessao: str) -> dict[str, str]:
+    """
+    Versão síncrona para resumir um resumo de sessão longo num título curto e resumo de 40 palavras.
+    """
+    prompt = f"""\
+Com base na memória longa de uma sessão fornecida abaixo, gera um "Cartão de Memória" muito curto e cativante em Português de Portugal (PT-PT).
+
+Responde APENAS com um objeto JSON na seguinte estrutura:
+{{
+  "titulo": "Título curto e bonito (ex: A Minha Primeira Bicicleta)",
+  "resumo_curto": "Um parágrafo curto e conciso de 30-40 palavras no máximo (2-3 frases), caloroso e direto. NUNCA mencione o nome do utilizador no resumo curto."
+}}
+
+MEMÓRIA COMPLETA:
+{resumo_sessao}
+"""
+    config = genai_types.GenerateContentConfig(
+        response_mime_type="application/json",
+        temperature=0.7,
+        max_output_tokens=256,
+    )
+    try:
+        resposta = _generate_with_fallback(prompt, config)
+        raw = _clean_json_response(resposta.text)
+        return json.loads(raw)
+    except Exception as exc:
+        logger.warning("Falha ao resumir cartão via Gemini: %s. A tentar Groq...", exc)
+        # Fallback para Groq
+        try:
+            from app.services.groq_service import _get_client
+            client = _get_client()
+            resposta_groq = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "Respondes APENAS com JSON válido. Segue exatamente a estrutura pedida.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.7,
+                max_tokens=256,
+            )
+            raw = resposta_groq.choices[0].message.content.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            return json.loads(raw.strip())
+        except Exception as groq_exc:
+            logger.exception("Fallback Groq falhou ao resumir cartão: %s", groq_exc)
+            # Fallback básico local em caso de falha de ambas as APIs
+            titulo = "Uma Recordação Especial"
+            # Tenta pegar a primeira frase do resumo
+            frases = resumo_sessao.split(".")
+            resumo_curto = frases[0].strip() + "." if frases else "Uma memória calorosa da minha vida."
+            return {"titulo": titulo, "resumo_curto": resumo_curto}
+
+
+async def resumir_cartao(resumo_sessao: str) -> dict[str, str]:
+    """
+    Interface assíncrona para gerar título e resumo curto (30-40 palavras) para os Cartões de Histórias.
+    """
+    if not resumo_sessao or not resumo_sessao.strip():
+        return {"titulo": "Memória Especial", "resumo_curto": "Uma memória guardada com carinho."}
+        
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _resumir_cartao_sync, resumo_sessao)

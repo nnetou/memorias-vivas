@@ -266,6 +266,7 @@ def _gerar_cartoes_pdf_sync(
     tmpl = env.get_template("story_card.html")
 
     cartoes = []
+    from app.services.gemini_service import _resumir_cartao_sync
     for s in sessoes:
         resumo = s.get("resumo_sessao")
         # Se a sessão não tiver resumo, não a incluímos nos cartões
@@ -273,9 +274,13 @@ def _gerar_cartoes_pdf_sync(
             continue
             
         tema = s.get("tema", "geral")
+        # Obter resumo curto e título estruturado para o cartão
+        cartao_dados = _resumir_cartao_sync(resumo)
+        
         cartoes.append({
             "tema_label": TEMAS_LABELS.get(tema, tema),
-            "resumo": resumo,
+            "titulo": cartao_dados.get("titulo") or "Uma Recordação Especial",
+            "resumo": cartao_dados.get("resumo_curto") or resumo,
             "facto_destaque": {
                 "terra_natal": p["terra_natal"],
                 "profissao": p["profissao"],
@@ -287,6 +292,7 @@ def _gerar_cartoes_pdf_sync(
     if not cartoes:
         cartoes.append({
             "tema_label": "Memórias",
+            "titulo": "Uma Vida de Recordações",
             "resumo": p["resumo_narrativo"] or "Uma vida rica em histórias.",
             "facto_destaque": {
                 "terra_natal": p["terra_natal"],

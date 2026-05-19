@@ -173,16 +173,30 @@ async def extract_profile_with_gemini(historico: list[dict]) -> dict:
     import asyncio
 
     _EXTRACTION_PROMPT = """\
-Analisa a conversa de onboarding abaixo e extrai o perfil biográfico em JSON.
-Devolve APENAS o JSON, sem explicações, sem markdown.
+Analisa a conversa abaixo com um idoso em Portugal e extrai o perfil biográfico detalhado no seguinte formato JSON.
+Devolve APENAS o JSON válido, sem qualquer introdução, explicação ou blocos markdown.
 
-Schema (usa null se não disponível):
+Schema JSON (usa null ou arrays vazios [] quando não houver informação correspondente):
 {{
   "nome": null,
   "terra_natal": null,
   "familia": null,
   "profissao": null,
   "memoria_marcante": null,
+  "pessoas": [],
+  "locais": [],
+  "datas_aproximadas": [],
+  "eventos_marcantes": [],
+  "tradicoes": [],
+  "expressoes_regionais": [],
+  "momentos_chave": [],
+  "linha_temporal": [
+    {{
+      "periodo": "Ex: 10 anos, 1970, ou infância",
+      "acontecimento": "Descrição breve do acontecimento"
+    }}
+  ],
+  "resumo_narrativo": null,
   "outros": {{}}
 }}
 
@@ -221,8 +235,12 @@ Conversa:
             if raw.startswith("json"):
                 raw = raw[4:]
         perfil = json.loads(raw.strip())
-        logger.info("Perfil extraído (fallback Groq): %s", list(perfil.keys()))
-        return perfil
+        from app.services.gemini_service import _PERFIL_VAZIO
+        perfil_rico = dict(_PERFIL_VAZIO)
+        for k, v in perfil.items():
+            perfil_rico[k] = v
+        logger.info("Perfil extraído (fallback Groq): %s", list(perfil_rico.keys()))
+        return perfil_rico
 
     except json.JSONDecodeError as exc:
         logger.error("Fallback Groq | JSON inválido na extração: %s", exc)

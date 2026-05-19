@@ -317,7 +317,7 @@ async def onboarding_endpoint(
             perfil = await onboarding_service.extract_profile_with_gemini(historico)
         except Exception as exc:
             logger.error("Erro extração perfil: %s", exc)
-        raise HTTPException(status_code=502, detail="Não foi possível processar o seu perfil. Por favor tente novamente.")
+            raise HTTPException(status_code=502, detail="Não foi possível processar o seu perfil. Por favor tente novamente.")
 
         nome = (perfil or {}).get("nome")
         await profile_service.save_profile(
