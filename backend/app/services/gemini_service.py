@@ -160,10 +160,10 @@ SCHEMA (devolve este objeto preenchido):
   "expressoes_regionais": [],
   "momentos_chave": [],
   "linha_temporal": [
-    {
+    {{
       "periodo": "Ex: 22 anos, 1975, ou infância",
       "acontecimento": "Descrição factual do evento marcante"
-    }
+    }}
   ],
   "resumo_narrativo": null,
   "outros": {{}}
