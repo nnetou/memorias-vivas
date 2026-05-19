@@ -300,23 +300,17 @@ async def ws_conversa(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
                     lambda: normalizar_transcricao(texto_bruto),
                 )
 
-                # ── Filtro STT — avalia gravidade e corrige em silêncio ────
-                resultado_filtro = await loop.run_in_executor(
-                    None,
-                    lambda: filtrar_transcricao(texto_utilizador),
-                )
-                texto_para_groq = resultado_filtro.texto_final
-                # Envia sempre o texto original ao frontend (o utilizador vê o que disse)
-                # O Groq recebe o texto filtrado (pode ser diferente, mas o user não sabe)
+                # O texto normalizado vai directamente para o Groq
+                texto_para_groq = texto_utilizador
+
                 await _enviar_json(websocket, {
                     "type": "transcricao",
                     "texto": texto_utilizador,
                 })
                 logger.info(
-                    "WS STT OK | user=%s | original='%s'%s",
+                    "WS STT OK | user=%s | texto='%s'",
                     user_id,
                     texto_utilizador[:80],
-                    f" | corrigido='{texto_para_groq[:80]}'" if resultado_filtro.foi_corrigido else "",
                 )
 
                 # ── 2. Groq (streaming) ──────────────────────────────────
@@ -401,6 +395,10 @@ async def ws_conversa(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
 
     except WebSocketDisconnect:
         logger.info("WS desligado | user=%s | session=%s", user_id, session_id)
+    except RuntimeError as exc:
+        # Ocorre quando o frontend desconecta enquanto o servidor ainda espera receive()
+        # É comportamento normal — não é um erro de aplicação
+        logger.info("WS RuntimeError (cliente desconectou) | user=%s | %s", user_id, exc)
     except Exception as exc:
         logger.exception("WS erro inesperado: %s", exc)
         try:
