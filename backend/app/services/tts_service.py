@@ -21,7 +21,9 @@ from __future__ import annotations
 import logging
 from typing import AsyncGenerator
 
+import httpx
 import edge_tts
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,55 @@ PITCH = "+0Hz"   # tom neutro
 
 
 # ---------------------------------------------------------------------------
+# ElevenLabs Helpers
+# ---------------------------------------------------------------------------
+
+async def _sintetizar_elevenlabs(texto: str) -> bytes:
+    voice_id = settings.ELEVENLABS_VOICE_ID or "21m00Tcm4TlvDq8ikWAM"
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    headers = {
+        "xi-api-key": settings.ELEVENLABS_API_KEY,
+        "Content-Type": "application/json"
+    }
+    body = {
+        "text": texto,
+        "model_id": "eleven_multilingual_v2",
+        "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75
+        }
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=body, headers=headers, timeout=30.0)
+        if response.status_code != 200:
+            raise RuntimeError(f"ElevenLabs TTS failed: {response.status_code} - {response.text}")
+        return response.content
+
+
+async def _sintetizar_streaming_elevenlabs(texto: str) -> AsyncGenerator[bytes, None]:
+    voice_id = settings.ELEVENLABS_VOICE_ID or "21m00Tcm4TlvDq8ikWAM"
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream"
+    headers = {
+        "xi-api-key": settings.ELEVENLABS_API_KEY,
+        "Content-Type": "application/json"
+    }
+    body = {
+        "text": texto,
+        "model_id": "eleven_multilingual_v2",
+        "voice_settings": {
+            "stability": 0.5,
+            "similarity_boost": 0.75
+        }
+    }
+    async with httpx.AsyncClient() as client:
+        async with client.stream("POST", url, json=body, headers=headers, timeout=30.0) as response:
+            if response.status_code != 200:
+                raise RuntimeError(f"ElevenLabs TTS stream failed: {response.status_code}")
+            async for chunk in response.aiter_bytes():
+                yield chunk
+
+
+# ---------------------------------------------------------------------------
 # API pública
 # ---------------------------------------------------------------------------
 
@@ -49,26 +100,26 @@ async def sintetizar(
 ) -> bytes:
     """
     Converte texto em áudio MP3 em PT-PT.
-
-    Args:
-        texto: Texto a sintetizar (máximo recomendado: 5000 caracteres).
-        voz:   Nome da voz (ex: "raquel", "duarte") ou nome completo
-               do modelo edge-tts (ex: "pt-PT-RaquelNeural").
-
-    Returns:
-        Bytes do ficheiro MP3 pronto a enviar ao cliente.
-
-    Raises:
-        RuntimeError: Falha na comunicação com o serviço edge-tts.
+    Se ELEVENLABS_API_KEY estiver configurada, usa ElevenLabs.
+    Caso contrário, ou em caso de erro, usa edge-tts como fallback robusto.
     """
     if not texto or not texto.strip():
         raise ValueError("Texto vazio — nada a sintetizar.")
 
+    # ── Tentativa 1: ElevenLabs (se API Key configurada) ──────────────────
+    if settings.ELEVENLABS_API_KEY:
+        try:
+            logger.info("TTS ElevenLabs | chars=%d | voice_id=%s", len(texto), settings.ELEVENLABS_VOICE_ID)
+            return await _sintetizar_elevenlabs(texto)
+        except Exception as exc:
+            logger.warning("ElevenLabs falhou (%s) — a usar edge-tts como fallback.", exc)
+
+    # ── Tentativa 2: edge-tts (Padrão / Fallback) ─────────────────────────
     # Resolver nome curto → nome completo
     voz_resolvida = VOZES_DISPONIVEIS.get(voz.lower(), voz)
 
     logger.info(
-        "TTS | voz=%s | chars=%d",
+        "TTS edge-tts | voz=%s | chars=%d",
         voz_resolvida, len(texto),
     )
 
@@ -89,7 +140,7 @@ async def sintetizar(
         audio_bytes = b"".join(audio_chunks)
 
         logger.info(
-            "TTS concluído | voz=%s | tamanho=%.1f KB",
+            "TTS edge-tts concluído | voz=%s | tamanho=%.1f KB",
             voz_resolvida, len(audio_bytes) / 1024,
         )
         return audio_bytes
@@ -105,14 +156,23 @@ async def sintetizar_streaming(
 ) -> AsyncGenerator[bytes, None]:
     """
     Versão streaming — emite chunks de áudio MP3 à medida que são gerados.
-    Útil para o WebSocket (Epic 5.3) para reduzir latência percebida.
-
-    Yields:
-        Chunks de bytes MP3.
+    Se ELEVENLABS_API_KEY estiver configurada, usa ElevenLabs.
+    Caso contrário, ou em caso de erro, usa edge-tts como fallback robusto.
     """
     if not texto or not texto.strip():
         raise ValueError("Texto vazio.")
 
+    # ── Tentativa 1: ElevenLabs (se API Key configurada) ──────────────────
+    if settings.ELEVENLABS_API_KEY:
+        try:
+            logger.info("TTS ElevenLabs Streaming | chars=%d", len(texto))
+            async for chunk in _sintetizar_streaming_elevenlabs(texto):
+                yield chunk
+            return
+        except Exception as exc:
+            logger.warning("ElevenLabs Streaming falhou (%s) — a usar edge-tts como fallback.", exc)
+
+    # ── Tentativa 2: edge-tts (Padrão / Fallback) ─────────────────────────
     voz_resolvida = VOZES_DISPONIVEIS.get(voz.lower(), voz)
 
     communicate = edge_tts.Communicate(

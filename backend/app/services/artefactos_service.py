@@ -471,10 +471,11 @@ def _gerar_video_sync(
 
 
 async def _tts_para_ficheiro(texto: str, caminho: str) -> None:
-    """Gera narração TTS em PT-PT via edge-tts e guarda em ficheiro."""
-    import edge_tts
-    communicate = edge_tts.Communicate(texto, voice="pt-PT-RaquelNeural")
-    await communicate.save(caminho)
+    """Gera narração TTS em PT-PT (suporta ElevenLabs / edge-tts) e guarda em ficheiro."""
+    from app.services.tts_service import sintetizar
+    audio_bytes = await sintetizar(texto)
+    with open(caminho, "wb") as f:
+        f.write(audio_bytes)
 
 
 async def gerar_video(

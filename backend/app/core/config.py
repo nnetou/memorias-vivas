@@ -12,6 +12,8 @@ class Settings:
     # Chaves de API
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+    ELEVENLABS_API_KEY: str = os.getenv("ELEVENLABS_API_KEY", "")
+    ELEVENLABS_VOICE_ID: str = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")  # Rachel
     APP_ENV: str = os.getenv("APP_ENV", "development")
 
     # Base de dados (PostgreSQL async)
