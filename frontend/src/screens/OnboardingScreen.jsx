@@ -1,11 +1,6 @@
 /**
  * screens/OnboardingScreen.jsx — Onboarding conversacional por voz.
- *
- * VUI empático com loop contínuo:
- *  - currentPromptText: estado único que controla o texto visível no ecrã
- *  - Quando silêncio/alucinação: combina frase de transição + pergunta original
- *  - Texto e áudio sincronizados — o ecrã mostra exatamente o que a Raquel diz
- *  - Microfone reativa automaticamente após cada resposta da Raquel
+ * Mobile-first com barra de progresso, microfone grande e texto legível.
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -28,11 +23,10 @@ const isAlucinacao = (texto) => {
   return !texto || texto.trim().length < 3 || ALUCINACOES.has(t);
 };
 
-// ---------------------------------------------------------------------------
-// Ícones
-// ---------------------------------------------------------------------------
+// ── Ícones ─────────────────────────────────────────────────────────────────
+
 const IconMic = () => (
-  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 2a3 3 0 0 1 3 3v7a3 3 0 0 1-6 0V5a3 3 0 0 1 3-3z"/>
     <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
     <line x1="12" y1="19" x2="12" y2="23"/>
@@ -41,33 +35,57 @@ const IconMic = () => (
 );
 
 const IconStop = () => (
-  <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor">
+  <svg width="38" height="38" viewBox="0 0 24 24" fill="currentColor">
     <rect x="6" y="6" width="12" height="12" rx="2"/>
   </svg>
 );
 
-// ---------------------------------------------------------------------------
-// Componente principal
-// ---------------------------------------------------------------------------
+// ── Barra de progresso ─────────────────────────────────────────────────────
+
+function BarraProgresso({ passo, total = 5 }) {
+  return (
+    <div style={{ padding: "1rem 1.5rem 0" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+        <span style={{ color: "var(--azul-claro)", fontSize: "var(--text-xs)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Apresentação
+        </span>
+        <span style={{ color: "var(--dourado)", fontSize: "var(--text-xs)", fontWeight: 600 }}>
+          {Math.min(passo, total)} / {total}
+        </span>
+      </div>
+      <div style={{ height: "3px", background: "rgba(255,255,255,0.15)", borderRadius: "4px", overflow: "hidden" }}>
+        <div style={{
+          height: "100%",
+          width: `${Math.min((passo / total) * 100, 100)}%`,
+          background: "var(--dourado)",
+          borderRadius: "4px",
+          transition: "width 0.5s ease",
+        }} />
+      </div>
+    </div>
+  );
+}
+
+// ── Componente principal ───────────────────────────────────────────────────
 
 export default function OnboardingScreen() {
-  const userId       = TokenStorage.getUserId();
-  const { logout }   = useAuth();
+  const userId     = TokenStorage.getUserId();
+  const { logout } = useAuth();
 
-  const [historico,        setHistorico]        = useState([]);
-  const [currentPromptText, setCurrentPromptText] = useState(""); // texto visível — sempre igual ao que a Raquel diz
-  const [perguntaOriginal,  setPerguntaOriginal]  = useState(""); // última pergunta válida do backend
+  const [historico,         setHistorico]         = useState([]);
+  const [currentPromptText, setCurrentPromptText] = useState("");
+  const [perguntaOriginal,  setPerguntaOriginal]  = useState("");
   const [transcricao,       setTranscricao]       = useState("");
   const [fase,              setFase]              = useState("iniciando");
+  const [passoAtual,        setPassoAtual]        = useState(0);
 
   const mediaRecRef    = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef       = useRef(null);
   const iniciouRef     = useRef(false);
 
-  // ---------------------------------------------------------------------------
-  // TTS — sintetiza e devolve URL
-  // ---------------------------------------------------------------------------
+  // ── TTS ────────────────────────────────────────────────────────────────
+
   const sintetizar = async (texto) => {
     try {
       const res = await fetch(`${AUDIO}/sintetizar`, {
@@ -80,13 +98,11 @@ export default function OnboardingScreen() {
     } catch { return null; }
   };
 
-  // ---------------------------------------------------------------------------
-  // Typewriter sincronizado com o áudio
-  // Atualiza currentPromptText ao ritmo do áudio
-  // ---------------------------------------------------------------------------
+  // ── Typewriter sincronizado ────────────────────────────────────────────
+
   const tocarComTypewriter = (texto, audioUrl) => {
     return new Promise((resolve) => {
-      setCurrentPromptText(""); // limpar antes de começar
+      setCurrentPromptText("");
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
 
       if (!audioUrl || !texto) {
@@ -119,45 +135,43 @@ export default function OnboardingScreen() {
 
       audio.addEventListener("ended",  fallback, { once: true });
       audio.addEventListener("error",  fallback, { once: true });
-      setTimeout(fallback, 15000); // safety timeout
+      setTimeout(fallback, 15000);
       audio.load();
     });
   };
 
-  // ---------------------------------------------------------------------------
-  // Turno principal — backend → TTS → typewriter → microfone
-  // ---------------------------------------------------------------------------
+  // ── Turno principal ────────────────────────────────────────────────────
+
   const turno = async (mensagem, hist) => {
     setFase("processando");
-
     try {
       const res = await fetch(`${CHAT_API}/onboarding`, {
         method:  "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${TokenStorage.getAccess()}` },
         body: JSON.stringify({ user_id: userId, mensagem, historico: hist }),
       });
-
       if (!res.ok) throw new Error("Erro no servidor.");
 
       const data = await res.json();
       setHistorico(data.historico_atualizado);
 
+      // Avançar barra de progresso com cada turno (máx 5)
+      if (mensagem) setPassoAtual(p => Math.min(p + 1, 5));
+
       const pergunta = data.pergunta || "";
       setPerguntaOriginal(pergunta);
-
       setFase("ia_a_falar");
       const audioUrl = await sintetizar(pergunta);
       await tocarComTypewriter(pergunta, audioUrl);
 
       if (data.onboarding_completo) {
         setFase("completo");
+        setPassoAtual(5);
         setTimeout(() => window.location.reload(), 1500);
         return;
       }
-
       setFase("aguardar_mic");
-
-    } catch (err) {
+    } catch {
       setCurrentPromptText("Ocorreu um problema de ligação. Tente novamente.");
       setFase("erro");
     }
@@ -169,9 +183,8 @@ export default function OnboardingScreen() {
     turno("", []);
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // Loop empático — reformulação dinâmica via backend (llama3-8b)
-  // ---------------------------------------------------------------------------
+  // ── Loop empático ──────────────────────────────────────────────────────
+
   const pedirRepeticaoEmpatica = async () => {
     setFase("ia_a_falar");
     try {
@@ -182,18 +195,14 @@ export default function OnboardingScreen() {
       });
       const data = res.ok ? await res.json() : null;
       const fraseReformulada = data?.reformulada || "Peço desculpa, não consegui ouvir. Pode repetir?";
-
       const audioUrl = await sintetizar(fraseReformulada);
       await tocarComTypewriter(fraseReformulada, audioUrl);
-    } catch {
-      // Fallback silencioso — só reativa o microfone
-    }
+    } catch { /* fallback silencioso */ }
     setFase("aguardar_mic");
   };
 
-  // ---------------------------------------------------------------------------
-  // Transcrição STT
-  // ---------------------------------------------------------------------------
+  // ── STT ────────────────────────────────────────────────────────────────
+
   const transcrever = async (audioBytes) => {
     const form = new FormData();
     form.append("audio", new Blob([audioBytes], { type: "audio/webm" }), "resposta.webm");
@@ -206,9 +215,8 @@ export default function OnboardingScreen() {
     return (await res.json()).texto;
   };
 
-  // ---------------------------------------------------------------------------
-  // Gravação
-  // ---------------------------------------------------------------------------
+  // ── Gravação ───────────────────────────────────────────────────────────
+
   const iniciarGravacao = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -219,8 +227,6 @@ export default function OnboardingScreen() {
 
       rec.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-
-        // Verificar duração e tamanho mínimos
         const duracaoMs  = Date.now() - (mediaRecRef.current._inicio || Date.now());
         const totalBytes = audioChunksRef.current.reduce((a, b) => a + b.size, 0);
 
@@ -233,12 +239,7 @@ export default function OnboardingScreen() {
         try {
           const buf   = await new Blob(audioChunksRef.current).arrayBuffer();
           const texto = await transcrever(buf);
-
-          if (isAlucinacao(texto)) {
-            await pedirRepeticaoEmpatica();
-            return;
-          }
-
+          if (isAlucinacao(texto)) { await pedirRepeticaoEmpatica(); return; }
           setTranscricao(texto);
           await turno(texto, historico);
         } catch {
@@ -258,9 +259,8 @@ export default function OnboardingScreen() {
 
   const pararGravacao = () => mediaRecRef.current?.stop();
 
-  // ---------------------------------------------------------------------------
-  // Config por fase
-  // ---------------------------------------------------------------------------
+  // ── Config por fase ────────────────────────────────────────────────────
+
   const btnConfig = {
     iniciando:     { ativo: false, label: "Um momento..." },
     ia_a_falar:    { ativo: false, label: "A Raquel está a falar..." },
@@ -275,108 +275,152 @@ export default function OnboardingScreen() {
   const cfg     = btnConfig[fase] || btnConfig.iniciando;
   const aGravar = fase === "gravando";
 
-  // ---------------------------------------------------------------------------
-  // Ecrã de conclusão
-  // ---------------------------------------------------------------------------
+  // ── Ecrã de conclusão ──────────────────────────────────────────────────
+
   if (fase === "completo") return (
-    <div className="min-h-screen bg-[#FAF7F2] flex items-center justify-center p-8">
-      <div className="text-center max-w-md" style={{ fontFamily: "'Lora', serif" }}>
-        <div className="w-16 h-[2px] bg-[#c9a84c] mx-auto mb-10" />
-        <h2 className="text-[#1e3a5f] mb-4"
-          style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "2.4rem", fontWeight: 500 }}>
-          Muito obrigado
-        </h2>
-        <p className="text-[#888] text-xl leading-relaxed mb-10">
-          O seu perfil foi criado. A preparar a sua experiência...
-        </p>
-        <div className="flex justify-center">
-          <div className="w-8 h-8 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
-        </div>
-      </div>
+    <div style={{
+      minHeight: "100dvh",
+      background: "var(--creme)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "2rem",
+      textAlign: "center",
+    }} className="animate-fade-in">
+      <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Lora:wght@400;500;600&display=swap" rel="stylesheet" />
+      <div style={{ fontSize: "3.5rem", marginBottom: "1.5rem" }}>✨</div>
+      <div className="linha-dourada" style={{ width: "48px", margin: "0 auto 1.5rem" }} />
+      <h2 style={{ color: "var(--azul)", fontFamily: "var(--font-display)", fontSize: "var(--text-4xl)", fontWeight: 500, margin: "0 0 1rem" }}>
+        Muito obrigado
+      </h2>
+      <p style={{ color: "var(--cinza)", fontSize: "var(--text-xl)", lineHeight: 1.6, maxWidth: "320px", marginBottom: "2rem" }}>
+        O seu perfil foi criado. A preparar a sua experiência...
+      </p>
+      <div style={{
+        width: "36px", height: "36px",
+        border: "3px solid var(--azul)",
+        borderTopColor: "transparent",
+        borderRadius: "50%",
+        animation: "spin 1s linear infinite",
+      }} />
     </div>
   );
 
-  // ---------------------------------------------------------------------------
-  // Ecrã principal
-  // ---------------------------------------------------------------------------
+  // ── Ecrã principal ─────────────────────────────────────────────────────
+
   return (
-    <div className="min-h-screen bg-[#FAF7F2] flex flex-col" style={{ fontFamily: "'Lora', serif" }}>
+    <div style={{ minHeight: "100dvh", background: "var(--creme)", display: "flex", flexDirection: "column", fontFamily: "var(--font-serif)" }}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Lora:wght@400;500;600&display=swap" rel="stylesheet" />
 
-      <header className="bg-[#1e3a5f] px-8 py-5 flex items-center justify-between">
-        <div>
-          <span className="text-white" style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.5rem" }}>
-            Memórias Vivas
-          </span>
-          <div className="w-6 h-[1px] bg-[#c9a84c] mt-1" />
+      {/* Header com progresso */}
+      <header className="app-header" style={{ flexDirection: "column", alignItems: "stretch", padding: "1rem 1.25rem 0" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.875rem" }}>
+          <div>
+            <span style={{ color: "white", fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)", fontWeight: 500 }}>
+              Memórias Vivas
+            </span>
+            <div className="linha-dourada" style={{ width: "20px", marginTop: "3px" }} />
+          </div>
+          <button
+            onClick={logout}
+            style={{ background: "none", border: "none", color: "var(--azul-claro)", fontSize: "var(--text-sm)", fontFamily: "var(--font-serif)", cursor: "pointer", padding: "0.5rem" }}
+          >
+            Sair
+          </button>
         </div>
-        <button onClick={logout} className="text-[#7a9cbf] hover:text-white text-lg transition-colors tracking-wide">
-          Sair
-        </button>
+        <BarraProgresso passo={passoAtual} total={5} />
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-        <div className="w-full max-w-lg flex flex-col items-center">
+      {/* Conteúdo principal */}
+      <main style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", padding: "2rem 1.5rem 2rem" }}>
 
-          {/* Texto principal — espelho exacto do que a Raquel diz */}
-          <div className="w-full mb-12 min-h-[120px]">
-            {currentPromptText ? (
-              <>
-                <div className="w-8 h-[2px] bg-[#c9a84c] mb-6" />
-                {fase === "ia_a_falar" && (
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="flex gap-1">
-                      {[0,1,2].map(i => (
-                        <div key={i} className="w-1.5 h-1.5 bg-[#c9a84c] rounded-full animate-bounce"
-                          style={{ animationDelay: `${i*150}ms` }} />
-                      ))}
-                    </div>
-                    <span className="text-[#aaa] text-sm tracking-wide">Raquel</span>
+        {/* Área de texto da Raquel */}
+        <div style={{ width: "100%", maxWidth: "480px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+
+          {currentPromptText ? (
+            <div className="animate-fade-in">
+              {/* Indicador "Raquel a falar" */}
+              {fase === "ia_a_falar" && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "1.25rem" }}>
+                  <div style={{ display: "flex", gap: "5px" }}>
+                    {[0,1,2].map(i => (
+                      <div key={i} style={{
+                        width: "7px", height: "7px",
+                        background: "var(--dourado)",
+                        borderRadius: "50%",
+                        animation: `bounce3 1.2s ease-in-out infinite`,
+                        animationDelay: `${i * 180}ms`,
+                      }} />
+                    ))}
                   </div>
-                )}
-                <p className="text-[#1e3a5f] leading-relaxed"
-                  style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.8rem", fontWeight: 500 }}>
-                  {currentPromptText}
-                </p>
-              </>
-            ) : (
-              <div className="flex items-center gap-3 mt-8">
-                <div className="w-7 h-7 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
-                <p className="text-[#aaa] text-xl">Um momento...</p>
-              </div>
-            )}
-          </div>
+                  <span style={{ color: "var(--cinza)", fontSize: "var(--text-sm)", letterSpacing: "0.06em" }}>
+                    Raquel
+                  </span>
+                </div>
+              )}
 
-          {/* Última resposta do utilizador */}
-          {transcricao && !["gravando","transcrevendo","ia_a_falar"].includes(fase) && (
-            <div className="w-full mb-8 px-5 py-4 bg-white border-l-2 border-[#c9a84c]">
-              <p className="text-[#aaa] text-sm tracking-widest uppercase mb-2">A sua resposta</p>
-              <p className="text-[#555] text-xl leading-relaxed">{transcricao}</p>
+              <div className="linha-dourada" style={{ width: "28px", marginBottom: "1.25rem" }} />
+              <p style={{
+                color: "var(--azul)",
+                fontFamily: "var(--font-display)",
+                fontSize: "clamp(1.5rem, 5vw, 2.25rem)",
+                fontWeight: 500,
+                lineHeight: 1.45,
+                margin: 0,
+              }}>
+                {currentPromptText}
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+              <div style={{
+                width: "32px", height: "32px",
+                border: "2.5px solid var(--azul)",
+                borderTopColor: "transparent",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
+              }} />
+              <p style={{ color: "var(--cinza)", fontSize: "var(--text-xl)" }}>Um momento...</p>
             </div>
           )}
-
-          {/* Botão microfone */}
-          <div className="flex flex-col items-center gap-5 mt-2">
-            <button
-              onClick={aGravar ? pararGravacao : iniciarGravacao}
-              disabled={!cfg.ativo}
-              aria-label={cfg.label}
-              className={[
-                "w-28 h-28 rounded-full flex items-center justify-center text-white",
-                "transition-all duration-300 active:scale-95 disabled:cursor-not-allowed",
-                aGravar
-                  ? "bg-[#c0392b] scale-110 animate-pulse shadow-[0_8px_32px_rgba(192,57,43,0.4)]"
-                  : cfg.ativo
-                    ? "bg-[#1e3a5f] hover:bg-[#163050] shadow-[0_8px_32px_rgba(30,58,95,0.3)]"
-                    : "bg-[#d0cac0]",
-              ].join(" ")}
-            >
-              {aGravar ? <IconStop /> : <IconMic />}
-            </button>
-            <p className="text-[#888] text-lg tracking-wide">{cfg.label}</p>
-          </div>
-
         </div>
+
+        {/* Resposta do utilizador */}
+        {transcricao && !["gravando","transcrevendo","ia_a_falar"].includes(fase) && (
+          <div style={{
+            width: "100%",
+            maxWidth: "480px",
+            background: "white",
+            borderLeft: "3px solid var(--dourado)",
+            borderRadius: "0 var(--radius-sm) var(--radius-sm) 0",
+            padding: "1rem 1.25rem",
+            marginBottom: "1.5rem",
+          }} className="animate-slide-up">
+            <p style={{ color: "var(--cinza)", fontSize: "var(--text-xs)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.4rem" }}>
+              A sua resposta
+            </p>
+            <p style={{ color: "var(--texto-suave)", fontSize: "var(--text-lg)", margin: 0, lineHeight: 1.5 }}>
+              {transcricao}
+            </p>
+          </div>
+        )}
+
+        {/* Botão microfone */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", width: "100%", maxWidth: "480px" }}>
+          <button
+            id="btn-mic-onboarding"
+            onClick={aGravar ? pararGravacao : iniciarGravacao}
+            disabled={!cfg.ativo}
+            aria-label={cfg.label}
+            className={`mic-btn ${aGravar ? "gravando" : cfg.ativo ? "idle" : "disabled"}`}
+            style={{ width: "140px", height: "140px" }}
+          >
+            {aGravar ? <IconStop /> : <IconMic />}
+          </button>
+          <p className="mic-label" style={{ fontSize: "var(--text-lg)" }}>{cfg.label}</p>
+        </div>
+
       </main>
     </div>
   );

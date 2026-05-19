@@ -1,11 +1,6 @@
 /**
- * screens/ProfileScreen.jsx — Perfil do utilizador e definições.
- *
- * Secções:
- *  - Dados biográficos extraídos pelo Gemini/Groq (perfil_json)
- *  - Temas explorados
- *  - Alterar password
- *  - Sair da conta
+ * screens/ProfileScreen.jsx — Perfil do utilizador.
+ * Mobile-first: tap targets grandes, secções colapsáveis, logout claro.
  */
 
 import { useState, useEffect } from "react";
@@ -13,18 +8,10 @@ import { TokenStorage, authApi } from "../api/client";
 
 const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-// ---------------------------------------------------------------------------
-// Ícones SVG
-// ---------------------------------------------------------------------------
-
-const IconArrowLeft = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M19 12H5M12 5l-7 7 7 7"/>
-  </svg>
-);
+// ── Ícones ──────────────────────────────────────────────────────────────────
 
 const IconUser = () => (
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
     <circle cx="12" cy="7" r="4"/>
   </svg>
@@ -38,7 +25,7 @@ const IconLock = () => (
 );
 
 const IconLogout = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
     <polyline points="16 17 21 12 16 7"/>
     <line x1="21" y1="12" x2="9" y2="12"/>
@@ -46,15 +33,13 @@ const IconLogout = () => (
 );
 
 const IconChevron = ({ open }) => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-    style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    style={{ transform: open ? "rotate(180deg)" : "rotate(0)", transition: "transform 0.25s" }}>
     <polyline points="6 9 12 15 18 9"/>
   </svg>
 );
 
-// ---------------------------------------------------------------------------
-// Componente — Linha de perfil
-// ---------------------------------------------------------------------------
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatarValor(v) {
   if (v === null || v === undefined) return null;
@@ -69,37 +54,54 @@ function formatarValor(v) {
   return String(v);
 }
 
-function LinhaPerfilBio({ label, valor }) {
+// ── Sub-componentes ─────────────────────────────────────────────────────────
+
+function LinhaBio({ label, valor }) {
   const texto = formatarValor(valor);
   if (!texto) return null;
   return (
-    <div className="py-5 border-b border-[#f0ebe3] last:border-0">
-      <p className="text-[#aaa] text-sm tracking-widest uppercase mb-1">{label}</p>
-      <p className="text-[#1a1a2e] text-xl leading-relaxed">{texto}</p>
+    <div style={{ padding: "1rem 0", borderBottom: "1px solid var(--creme-escuro)" }}>
+      <p style={{ color: "var(--cinza)", fontSize: "var(--text-xs)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.35rem" }}>
+        {label}
+      </p>
+      <p style={{ color: "var(--texto)", fontSize: "var(--text-xl)", lineHeight: 1.5, margin: 0, fontFamily: "var(--font-serif)" }}>
+        {texto}
+      </p>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Componente — Secção colapsável
-// ---------------------------------------------------------------------------
-
-function Seccao({ titulo, children, defaultOpen = false }) {
+function Seccao({ titulo, defaultOpen = false, children }) {
   const [aberta, setAberta] = useState(defaultOpen);
   return (
-    <div className="bg-white border border-[#e8e0d5] mb-4">
+    <div style={{
+      background: "white",
+      border: "1.5px solid #e8e0d5",
+      borderRadius: "var(--radius-md)",
+      marginBottom: "0.875rem",
+      overflow: "hidden",
+    }}>
       <button
         onClick={() => setAberta(!aberta)}
-        className="w-full flex items-center justify-between px-7 py-5 text-left hover:bg-[#faf7f2] transition-colors"
+        style={{
+          width: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "1.25rem 1.5rem",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          minHeight: "var(--tap-lg)",
+        }}
       >
-        <span className="text-[#1e3a5f] text-xl font-semibold"
-          style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.3rem" }}>
+        <span style={{ color: "var(--azul)", fontFamily: "var(--font-display)", fontSize: "var(--text-xl)", fontWeight: 600 }}>
           {titulo}
         </span>
         <IconChevron open={aberta} />
       </button>
       {aberta && (
-        <div className="px-7 pb-6 border-t border-[#f0ebe3]">
+        <div style={{ padding: "0 1.5rem 1.5rem", borderTop: "1px solid var(--creme-escuro)" }}>
           {children}
         </div>
       )}
@@ -107,87 +109,72 @@ function Seccao({ titulo, children, defaultOpen = false }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Ecrã principal
-// ---------------------------------------------------------------------------
+function SpinnerAzul() {
+  return (
+    <div style={{
+      width: "32px", height: "32px",
+      border: "2.5px solid var(--azul)",
+      borderTopColor: "transparent",
+      borderRadius: "50%",
+      animation: "spin 1s linear infinite",
+    }} />
+  );
+}
 
-export default function ProfileScreen({ onVoltar, onLogout, utilizadorInicial }) {
+// ── Ecrã principal ───────────────────────────────────────────────────────────
+
+export default function ProfileScreen({ utilizadorInicial, onLogout }) {
   const [utilizador, setUtilizador] = useState(utilizadorInicial || null);
-  const [perfil, setPerfil]         = useState(null);
-  const [loading, setLoading]       = useState(true);
-  const [erro, setErro]             = useState("");
+  const [perfil,     setPerfil]     = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [erro,       setErro]       = useState("");
 
-  // Alterar password
-  const [pwAtual,  setPwAtual]  = useState("");
-  const [pwNova,   setPwNova]   = useState("");
-  const [pwErro,   setPwErro]   = useState("");
+  const [pwAtual,   setPwAtual]   = useState("");
+  const [pwNova,    setPwNova]    = useState("");
+  const [pwErro,    setPwErro]    = useState("");
   const [pwSucesso, setPwSucesso] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
-
-  // ---------------------------------------------------------------------------
-  // Carregar dados
-  // ---------------------------------------------------------------------------
 
   useEffect(() => {
     const carregar = async () => {
       setLoading(true);
       try {
-        // Usar dados do utilizador já disponíveis — evita re-fetch desnecessário
         if (!utilizadorInicial) {
           const user = await authApi.me();
           setUtilizador(user);
         }
-
-        // Perfil biográfico
         const res = await fetch(
           `${BASE}/api/v1/auth/perfil`,
           { headers: { Authorization: `Bearer ${TokenStorage.getAccess()}` } }
         );
-        if (res.ok) {
-          const data = await res.json();
-          setPerfil(data);
-        }
-      } catch (err) {
-        setErro("Não foi possível carregar o perfil.");
-      } finally {
-        setLoading(false);
-      }
+        if (res.ok) setPerfil(await res.json());
+      } catch { setErro("Não foi possível carregar o perfil."); }
+      finally { setLoading(false); }
     };
     carregar();
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // Alterar password
-  // ---------------------------------------------------------------------------
-
   const handleAlterarPassword = async (e) => {
     e.preventDefault();
     setPwErro(""); setPwSucesso("");
-    if (!pwAtual || !pwNova) { setPwErro("Preencha os dois campos."); return; }
+    if (!pwAtual || !pwNova) { setPwErro("Por favor preencha os dois campos."); return; }
     if (pwNova.length < 8)   { setPwErro("A nova password deve ter pelo menos 8 caracteres."); return; }
     setPwLoading(true);
     try {
       await authApi.alterarPassword(pwAtual, pwNova);
       setPwSucesso("Password alterada com sucesso.");
       setPwAtual(""); setPwNova("");
-    } catch (err) {
-      setPwErro(err.message || "Erro ao alterar password.");
-    } finally {
-      setPwLoading(false);
-    }
+    } catch (err) { setPwErro(err.message || "Erro ao alterar password."); }
+    finally { setPwLoading(false); }
   };
 
-  // ---------------------------------------------------------------------------
-  // Loading
-  // ---------------------------------------------------------------------------
-
   if (loading) return (
-    <div className="min-h-screen bg-[#FAF7F2] flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin" />
+    <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <SpinnerAzul />
     </div>
   );
 
-  const bio = perfil?.perfil_json || {};
+  const bio   = perfil?.perfil_json || {};
   const temas = perfil?.temas_explorados || [];
 
   const TEMAS_LABELS = {
@@ -195,80 +182,110 @@ export default function ProfileScreen({ onVoltar, onLogout, utilizadorInicial })
     entretenimento: "Entretenimento", exercicio: "Exercício", geral: "Conversa livre",
   };
 
-  const inputPw = "w-full px-0 py-3 bg-transparent border-b-2 border-[#c8bfb0] focus:border-[#1e3a5f] focus:outline-none text-[#1a1a2e] text-xl transition-colors placeholder-[#c0b8af]";
-
   return (
-    <div className="min-h-screen bg-[#FAF7F2] flex flex-col" style={{ fontFamily: "'Lora', serif" }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--creme)" }}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Lora:wght@400;500;600&display=swap" rel="stylesheet" />
 
       {/* Header */}
-      <header className="bg-[#1e3a5f] px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button onClick={onVoltar} className="text-[#7a9cbf] hover:text-white transition-colors p-1">
-            <IconArrowLeft />
-          </button>
-          <div>
-            <p className="text-white text-xl"
-              style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.3rem" }}>
-              O meu perfil
-            </p>
-            <div className="w-4 h-[1px] bg-[#c9a84c] mt-0.5" />
-          </div>
+      <header className="app-header">
+        <div>
+          <span style={{ color: "white", fontFamily: "var(--font-display)", fontSize: "var(--text-2xl)", fontWeight: 500 }}>
+            O meu Perfil
+          </span>
+          <div className="linha-dourada" style={{ width: "24px", marginTop: "4px" }} />
         </div>
       </header>
 
-      {/* Corpo */}
-      <main className="flex-1 px-4 py-8 max-w-2xl w-full mx-auto">
+      {/* Conteúdo */}
+      <main style={{ flex: 1, padding: "1.5rem 1.25rem", overflowY: "auto" }} className="pb-nav">
 
-        {/* Cabeçalho do perfil */}
-        <div className="flex items-center gap-5 mb-8 px-2">
-          <div className="w-16 h-16 rounded-full bg-[#1e3a5f] flex items-center justify-center text-white flex-shrink-0">
+        {/* Avatar + nome */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "1rem",
+          marginBottom: "1.75rem",
+          padding: "1.25rem 1.5rem",
+          background: "white",
+          borderRadius: "var(--radius-md)",
+          border: "1.5px solid #e8e0d5",
+          boxShadow: "var(--shadow-sm)",
+        }} className="animate-slide-down">
+          <div style={{
+            width: "64px", height: "64px",
+            borderRadius: "50%",
+            background: "var(--azul)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "white", flexShrink: 0,
+          }}>
             <IconUser />
           </div>
           <div>
-            <h2 className="text-[#1e3a5f]"
-              style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "1.9rem", fontWeight: 500 }}>
+            <h2 style={{
+              color: "var(--azul)",
+              fontFamily: "var(--font-display)",
+              fontSize: "var(--text-2xl)",
+              fontWeight: 500,
+              margin: "0 0 0.2rem",
+            }}>
               {utilizador?.nome || "Utilizador"}
             </h2>
-            <p className="text-[#aaa] text-lg">{utilizador?.email}</p>
+            <p style={{ color: "var(--cinza)", fontSize: "var(--text-base)", margin: 0 }}>
+              {utilizador?.email}
+            </p>
           </div>
         </div>
 
         {erro && (
-          <p className="text-red-600 text-lg border border-red-200 bg-red-50 px-5 py-3 mb-6">{erro}</p>
+          <div style={{
+            background: "#fef2f2", border: "1px solid #fca5a5",
+            borderRadius: "var(--radius-sm)", padding: "1rem 1.25rem",
+            marginBottom: "1.25rem", color: "#b91c1c", fontSize: "var(--text-base)",
+          }} role="alert">
+            {erro}
+          </div>
         )}
 
-        {/* Perfil biográfico */}
+        {/* Perfil Biográfico */}
         <Seccao titulo="Perfil Biográfico" defaultOpen={true}>
           {Object.keys(bio).length === 0 ? (
-            <p className="text-[#aaa] text-xl pt-5">
+            <p style={{ color: "var(--cinza)", fontSize: "var(--text-lg)", paddingTop: "1rem", lineHeight: 1.6 }}>
               O seu perfil biográfico ainda não foi criado. Complete o onboarding para o preencher.
             </p>
           ) : (
-            <div className="mt-2">
-              <LinhaPerfilBio label="Nome"              valor={bio.nome} />
-              <LinhaPerfilBio label="Terra natal"       valor={bio.terra_natal} />
-              <LinhaPerfilBio label="Família"           valor={bio.familia} />
-              <LinhaPerfilBio label="Profissão"         valor={bio.profissao} />
-              <LinhaPerfilBio label="Memória marcante"  valor={bio.memoria_marcante} />
+            <div>
+              <LinhaBio label="Nome"             valor={bio.nome} />
+              <LinhaBio label="Terra natal"      valor={bio.terra_natal} />
+              <LinhaBio label="Família"          valor={bio.familia} />
+              <LinhaBio label="Profissão"        valor={bio.profissao} />
+              <LinhaBio label="Memória marcante" valor={bio.memoria_marcante} />
               {bio.outros && Object.entries(bio.outros).map(([k, v]) =>
                 v !== null && v !== undefined
-                  ? <LinhaPerfilBio key={k} label={k.replace(/_/g, " ")} valor={v} />
+                  ? <LinhaBio key={k} label={k.replace(/_/g, " ")} valor={v} />
                   : null
               )}
             </div>
           )}
         </Seccao>
 
-        {/* Temas explorados */}
+        {/* Temas Explorados */}
         <Seccao titulo="Temas Explorados">
           {temas.length === 0 ? (
-            <p className="text-[#aaa] text-xl pt-5">Ainda não explorou nenhum tema.</p>
+            <p style={{ color: "var(--cinza)", fontSize: "var(--text-lg)", paddingTop: "1rem" }}>
+              Ainda não explorou nenhum tema.
+            </p>
           ) : (
-            <div className="flex flex-wrap gap-3 pt-5">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.625rem", paddingTop: "1rem" }}>
               {temas.map(t => (
-                <span key={t}
-                  className="px-4 py-2 bg-[#f0f4f8] border border-[#d0dae8] text-[#1e3a5f] text-lg">
+                <span key={t} style={{
+                  padding: "0.5rem 1rem",
+                  background: "var(--creme)",
+                  border: "1.5px solid var(--dourado-suave)",
+                  borderRadius: "var(--radius-full)",
+                  color: "var(--azul)",
+                  fontSize: "var(--text-base)",
+                  fontWeight: 500,
+                }}>
                   {TEMAS_LABELS[t] || t}
                 </span>
               ))}
@@ -276,38 +293,74 @@ export default function ProfileScreen({ onVoltar, onLogout, utilizadorInicial })
           )}
         </Seccao>
 
-        {/* Alterar password */}
+        {/* Segurança */}
         <Seccao titulo="Segurança">
-          <form onSubmit={handleAlterarPassword} noValidate className="pt-5">
-            <div className="flex items-center gap-2 mb-6 text-[#888]">
+          <form onSubmit={handleAlterarPassword} noValidate style={{ paddingTop: "1rem" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.5rem", color: "var(--cinza)" }}>
               <IconLock />
-              <span className="text-lg tracking-wide">Alterar password</span>
+              <span style={{ fontSize: "var(--text-base)", letterSpacing: "0.03em" }}>Alterar password</span>
             </div>
 
-            <div className="mb-7">
-              <label className="block text-[#aaa] text-sm tracking-widest uppercase mb-2">Password atual</label>
-              <input type="password" className={inputPw} value={pwAtual}
+            <div style={{ marginBottom: "1.5rem" }}>
+              <label style={{ display: "block", color: "var(--cinza)", fontSize: "var(--text-xs)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.4rem" }}>
+                Password atual
+              </label>
+              <input id="pw-atual" type="password" className="input-base" value={pwAtual}
                 onChange={e => setPwAtual(e.target.value)} placeholder="••••••••" />
             </div>
-            <div className="mb-8">
-              <label className="block text-[#aaa] text-sm tracking-widest uppercase mb-2">Nova password</label>
-              <input type="password" className={inputPw} value={pwNova}
-                onChange={e => setPwNova(e.target.value)} placeholder="mínimo 8 caracteres" />
+            <div style={{ marginBottom: "2rem" }}>
+              <label style={{ display: "block", color: "var(--cinza)", fontSize: "var(--text-xs)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.4rem" }}>
+                Nova password (mínimo 8 caracteres)
+              </label>
+              <input id="pw-nova" type="password" className="input-base" value={pwNova}
+                onChange={e => setPwNova(e.target.value)} placeholder="••••••••" />
             </div>
 
-            {pwErro   && <p className="text-red-600 text-lg mb-4">{pwErro}</p>}
-            {pwSucesso && <p className="text-green-700 text-lg mb-4">{pwSucesso}</p>}
+            {pwErro   && (
+              <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: "var(--radius-sm)", padding: "0.875rem 1rem", marginBottom: "1rem", color: "#b91c1c", fontSize: "var(--text-base)" }} role="alert">
+                {pwErro}
+              </div>
+            )}
+            {pwSucesso && (
+              <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "var(--radius-sm)", padding: "0.875rem 1rem", marginBottom: "1rem", color: "#15803d", fontSize: "var(--text-base)" }} role="status">
+                {pwSucesso}
+              </div>
+            )}
 
-            <button type="submit" disabled={pwLoading}
-              className="w-full py-4 bg-[#1e3a5f] text-white text-xl font-medium hover:bg-[#163050] disabled:opacity-50 transition-colors">
-              {pwLoading ? "A alterar..." : "Alterar password"}
+            <button id="btn-alterar-pw" type="submit" className="btn-primary" disabled={pwLoading}>
+              {pwLoading
+                ? <span style={{ display: "inline-block", width: "22px", height: "22px", border: "2.5px solid rgba(255,255,255,0.4)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.9s linear infinite" }} />
+                : "Alterar password"
+              }
             </button>
           </form>
         </Seccao>
 
-        {/* Sair */}
-        <button onClick={onLogout}
-          className="w-full flex items-center justify-center gap-3 py-5 border-2 border-[#e8e0d5] text-[#888] hover:border-[#c0392b] hover:text-[#c0392b] transition-all duration-200 text-xl mt-2 mb-8">
+        {/* Terminar sessão */}
+        <button
+          id="btn-terminar-sessao"
+          onClick={onLogout}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.75rem",
+            minHeight: "var(--tap-lg)",
+            background: "white",
+            border: "2px solid #e8e0d5",
+            borderRadius: "var(--radius-md)",
+            color: "var(--cinza)",
+            fontSize: "var(--text-lg)",
+            fontFamily: "var(--font-serif)",
+            fontWeight: 600,
+            cursor: "pointer",
+            transition: "all 0.2s",
+            marginBottom: "1rem",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--erro)"; e.currentTarget.style.color = "var(--erro)"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "#e8e0d5"; e.currentTarget.style.color = "var(--cinza)"; }}
+        >
           <IconLogout />
           Terminar sessão
         </button>

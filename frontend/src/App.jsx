@@ -1,28 +1,89 @@
-import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import LoginScreen      from "./screens/LoginScreen";
-import OnboardingScreen from "./screens/OnboardingScreen";
-import DashboardScreen  from "./screens/DashboardScreen";
+/**
+ * App.jsx — Roteador principal do Memórias Vivas.
+ * Arquitectura: tab-based com BottomNav persistente após autenticação.
+ * Tabs: inicio | conversa | portfolio | perfil
+ */
 
+import { useState } from "react";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import LoginScreen     from "./screens/LoginScreen";
+import OnboardingScreen from "./screens/OnboardingScreen";
+import DashboardScreen from "./screens/DashboardScreen";
+import PortfolioScreen  from "./screens/PortfolioScreen";
+import ProfileScreen    from "./screens/ProfileScreen";
+import BottomNav        from "./components/BottomNav";
+
+// ---------------------------------------------------------------------------
+// Loading Screen
+// ---------------------------------------------------------------------------
 const LoadingScreen = () => (
-  <div className="min-h-screen bg-[#FAF7F2] flex flex-col items-center justify-center gap-4">
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&display=swap" rel="stylesheet" />
-    <div className="w-10 h-[2px] bg-[#c9a84c] mb-4" />
-    <p className="text-[#1e3a5f] text-2xl"
-      style={{ fontFamily: "'Cormorant Garamond', serif", fontWeight: 400 }}>
+  <div style={{
+    minHeight: "100dvh",
+    background: "var(--creme)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "1.5rem",
+    fontFamily: "var(--font-display)",
+  }}>
+    <div className="linha-dourada" style={{ width: "40px" }} />
+    <p style={{ color: "var(--azul)", fontSize: "var(--text-3xl)", fontWeight: 400, margin: 0 }}>
       Memórias Vivas
     </p>
-    <div className="w-8 h-8 border-2 border-[#1e3a5f] border-t-transparent rounded-full animate-spin mt-4" />
+    <div style={{
+      width: "32px", height: "32px",
+      border: "2.5px solid var(--azul)",
+      borderTopColor: "transparent",
+      borderRadius: "50%",
+      animation: "spin 1s linear infinite",
+      marginTop: "0.5rem",
+    }} />
   </div>
 );
 
+// ---------------------------------------------------------------------------
+// App interior (autenticado)
+// ---------------------------------------------------------------------------
+function AppAutenticado({ utilizador, logout }) {
+  const [tabActiva, setTabActiva] = useState("inicio");
+
+  // Onboarding ainda não completo — fluxo dedicado sem bottom nav
+  if (!utilizador.onboarding_completo) {
+    return <OnboardingScreen />;
+  }
+
+  const renderTab = () => {
+    switch (tabActiva) {
+      case "inicio":
+        return <DashboardScreen />;
+      case "portfolio":
+        return <PortfolioScreen />;
+      case "perfil":
+        return <ProfileScreen utilizadorInicial={utilizador} onLogout={logout} />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100dvh" }}>
+      {renderTab()}
+      <BottomNav tabActiva={tabActiva} onChange={setTabActiva} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// App raiz
+// ---------------------------------------------------------------------------
 function AppInner() {
-  const { utilizador, loading } = useAuth();
+  const { utilizador, loading, logout } = useAuth();
 
-  if (loading)                         return <LoadingScreen />;
-  if (!utilizador)                     return <LoginScreen />;
-  if (!utilizador.onboarding_completo) return <OnboardingScreen />;
+  if (loading)     return <LoadingScreen />;
+  if (!utilizador) return <LoginScreen />;
 
-  return <DashboardScreen />;
+  return <AppAutenticado utilizador={utilizador} logout={logout} />;
 }
 
 export default function App() {
