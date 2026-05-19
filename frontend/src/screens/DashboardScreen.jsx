@@ -294,6 +294,7 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
   const mediaRecRef    = useRef(null);
   const audioChunksRef = useRef([]);
   const audioQueueRef  = useRef([]);
+  const audioPlayerRef = useRef(null);
   const anchorRef      = useRef(null);
   const textoCompletoRef = useRef("");
   const typewriter     = useTypewriter();
@@ -305,8 +306,11 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
     anchorRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensagens]);
 
-  // Ligar WebSocket
+  // Ligar WebSocket e instanciar Audio player
   useEffect(() => {
+    if (!audioPlayerRef.current) {
+      audioPlayerRef.current = new Audio();
+    }
     const ws = new WebSocket(WS_URL);
     ws.binaryType = "arraybuffer";
     wsRef.current = ws;
@@ -351,7 +355,9 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
     for (const c of q) { buf.set(new Uint8Array(c), off); off += c.byteLength; }
     const blob  = new Blob([buf], { type: "audio/mpeg" });
     const url   = URL.createObjectURL(blob);
-    const audio = new Audio(url);
+    
+    const audio = audioPlayerRef.current;
+    audio.src = url;
     const texto = textoCompletoRef.current;
 
     audio.addEventListener("loadedmetadata", () => {
@@ -361,13 +367,21 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
         (textoVisivel) => setMensagens(p => p.map((m, i) => i === p.length - 1 ? { ...m, texto: textoVisivel } : m)),
         () => setMensagens(p => p.map((m, i) => i === p.length - 1 ? { ...m, streaming: false } : m))
       );
-      audio.play();
-    });
+      audio.play().catch(e => console.warn("Erro ao reproduzir áudio:", e));
+    }, { once: true });
     audio.load();
   };
 
   const handleMic = async () => {
     setErro("");
+    // Desbloquear áudio no iOS no primeiro clique do utilizador
+    if (audioPlayerRef.current && !audioPlayerRef.current.unlocked) {
+      audioPlayerRef.current.src = "data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
+      audioPlayerRef.current.play().catch(() => {}).finally(() => {
+        audioPlayerRef.current.unlocked = true;
+      });
+    }
+
     if (micEstado === "idle") {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });

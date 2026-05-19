@@ -82,7 +82,14 @@ export default function OnboardingScreen() {
   const mediaRecRef    = useRef(null);
   const audioChunksRef = useRef([]);
   const timerRef       = useRef(null);
+  const audioPlayerRef = useRef(null);
   const iniciouRef     = useRef(false);
+
+  useEffect(() => {
+    if (!audioPlayerRef.current) {
+      audioPlayerRef.current = new Audio();
+    }
+  }, []);
 
   // ── TTS ────────────────────────────────────────────────────────────────
 
@@ -111,7 +118,8 @@ export default function OnboardingScreen() {
         return;
       }
 
-      const audio = new Audio(audioUrl);
+      const audio = audioPlayerRef.current;
+      audio.src = audioUrl;
       let pos = 0;
 
       const fallback = () => {
@@ -218,6 +226,14 @@ export default function OnboardingScreen() {
   // ── Gravação ───────────────────────────────────────────────────────────
 
   const iniciarGravacao = async () => {
+    // Desbloquear áudio no iOS no primeiro clique do utilizador
+    if (audioPlayerRef.current && !audioPlayerRef.current.unlocked) {
+      audioPlayerRef.current.src = "data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq";
+      audioPlayerRef.current.play().catch(() => {}).finally(() => {
+        audioPlayerRef.current.unlocked = true;
+      });
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const rec    = new MediaRecorder(stream, { mimeType: "audio/webm" });
