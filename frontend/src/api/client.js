@@ -6,7 +6,7 @@
  * Em caso de 401, limpa a sessão e redireciona para o login.
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const BASE_URL = import.meta.env.VITE_API_URL || window.location.origin;
 const CHAT_URL = `${BASE_URL}/api/v1/chat`;
 const AUTH_URL = `${BASE_URL}/api/v1/auth`;
 

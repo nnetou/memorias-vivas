@@ -6,7 +6,7 @@
 import { useState, useEffect } from "react";
 import { TokenStorage, authApi } from "../api/client";
 
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const BASE = import.meta.env.VITE_API_URL || window.location.origin;
 
 // ── Ícones ──────────────────────────────────────────────────────────────────
 

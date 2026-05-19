@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { TokenStorage } from "../api/client";
 import { useAuth } from "../contexts/AuthContext";
 
-const BASE     = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const BASE     = import.meta.env.VITE_API_URL || window.location.origin;
 const CHAT_API = `${BASE}/api/v1/chat`;
 const AUDIO    = `${BASE}/api/v1/audio`;
 
