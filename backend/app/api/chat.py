@@ -150,20 +150,12 @@ class EncerrarSessaoInput(BaseModel):
         ...,
         description="Histórico completo da sessão para extração Gemini.",
     )
-    tema: str = Field(
-        default="geral",
-        description="O tema discutido nesta sessão (ex: memorias, familia).",
-    )
 
 
 class EncerrarSessaoResponse(BaseModel):
     user_id: str
     perfil_atualizado: bool
     mensagem: str
-    resumo_narrativo: str | None = Field(
-        default=None,
-        description="Resumo narrativo da sessão gerado pelo Gemini (1-2 parágrafos, PT-PT).",
-    )
     erro: str | None = Field(default=None)
 
 
@@ -177,9 +169,11 @@ async def chat_endpoint(payload: MensagemEntrada):
     try:
         resultado = groq_service.chat(payload.mensagem, historico)
     except ValueError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        logger.error("Erro de serviço interno: %s", exc)
+        raise HTTPException(status_code=503, detail="O serviço está temporariamente indisponível. Por favor tente novamente em breves instantes.")
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Erro Groq: {exc}")
+        logger.error("Erro Groq interno: %s", exc)
+        raise HTTPException(status_code=502, detail="O assistente não está disponível neste momento. Por favor tente novamente.")
     await _persistir_se_redis(session_id, payload.mensagem, resultado["resposta"])
     return {**resultado, "session_id": session_id}
 
@@ -225,9 +219,11 @@ async def conversa_endpoint(payload: MensagemInput):
             tema=payload.tema,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        logger.error("Erro de serviço interno: %s", exc)
+        raise HTTPException(status_code=503, detail="O serviço está temporariamente indisponível. Por favor tente novamente em breves instantes.")
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Erro Groq: {exc}")
+        logger.error("Erro Groq interno: %s", exc)
+        raise HTTPException(status_code=502, detail="O assistente não está disponível neste momento. Por favor tente novamente.")
     await _persistir_se_redis(session_id, payload.mensagem, resultado["resposta"])
     return {**resultado, "session_id": session_id}
 
@@ -307,7 +303,8 @@ async def onboarding_endpoint(
                 None, lambda: onboarding_service.proxima_mensagem(hist_para_groq)
             )
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Erro Groq: {exc}")
+        logger.error("Erro Groq interno: %s", exc)
+        raise HTTPException(status_code=502, detail="O assistente não está disponível neste momento. Por favor tente novamente.")
 
     # Verificar se o onboarding está completo
     if onboarding_service.is_onboarding_complete(msg_assistente):
@@ -318,7 +315,8 @@ async def onboarding_endpoint(
         try:
             perfil = await onboarding_service.extract_profile_with_gemini(historico)
         except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Erro extração: {exc}")
+            logger.error("Erro extração perfil: %s", exc)
+        raise HTTPException(status_code=502, detail="Não foi possível processar o seu perfil. Por favor tente novamente.")
 
         nome = (perfil or {}).get("nome")
         await profile_service.save_profile(
@@ -403,9 +401,11 @@ async def conversa_personalizada_endpoint(
             historico=historico,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=503, detail=str(exc))
+        logger.error("Erro de serviço interno: %s", exc)
+        raise HTTPException(status_code=503, detail="O serviço está temporariamente indisponível. Por favor tente novamente em breves instantes.")
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Erro Groq: {exc}")
+        logger.error("Erro Groq interno: %s", exc)
+        raise HTTPException(status_code=502, detail="O assistente não está disponível neste momento. Por favor tente novamente.")
 
     if payload.registar_tema:
         await profile_service.add_tema_explorado(payload.user_id, payload.tema, db)
@@ -476,43 +476,22 @@ async def encerrar_sessao(
     usa Redis — pois o Redis pode ter expirado.
     """
     erro: str | None = None
-    resumo_narrativo: str | None = None
 
-    # 1. Gemini extrai novos factos da sessão + resumo narrativo em paralelo
-    from app.services import gemini_service
-    import asyncio
-
-    async def _extrair_factos() -> dict:
-        try:
-            return await onboarding_service.extract_profile_with_gemini(
-                payload.historico_sessao
-            )
-        except Exception as exc:
-            logger.warning("Extração de factos falhou para user=%s: %s", payload.user_id, exc)
-            return {}
-
-    async def _extrair_resumo() -> str:
-        try:
-            return await gemini_service.gerar_resumo_narrativo(payload.historico_sessao)
-        except Exception as exc:
-            logger.warning("Resumo narrativo falhou para user=%s: %s", payload.user_id, exc)
-            return ""
-
-    # Corre extração e resumo em paralelo (ambos são chamadas à API Gemini)
-    novos_factos, resumo_narrativo = await asyncio.gather(
-        _extrair_factos(),
-        _extrair_resumo(),
-    )
-
-    resumo_sessao_str = json.dumps(novos_factos or {}, ensure_ascii=False)
-    if not novos_factos:
-        # Fallback: usa o histórico como texto simples para o merge
+    # 1. Gemini extrai novos factos da sessão
+    try:
+        novos_factos = await onboarding_service.extract_profile_with_gemini(
+            payload.historico_sessao
+        )
+        resumo_sessao_str = json.dumps(novos_factos or {}, ensure_ascii=False)
+    except Exception as exc:
+        logger.warning("Extração Gemini falhou para user=%s: %s", payload.user_id, exc)
+        # Fallback: usa o histórico como texto simples
         resumo_sessao_str = "\n".join(
             f"{m.get('role','?').upper()}: {m.get('content','')}"
             for m in payload.historico_sessao
             if isinstance(m, dict)
         )
-        erro = "Extração de factos retornou vazio"
+        erro = f"Extração Gemini: {exc}"
 
     # 2. Carrega perfil atual e executa merge via LangGraph
     perfil_db = await profile_service.get_profile(payload.user_id, db)
@@ -533,34 +512,17 @@ async def encerrar_sessao(
     perfil_atualizado = False
     if perfil_fundido:
         try:
-            # Passamos historico_onboarding=None para manter o original da BD
             await profile_service.save_profile(
                 user_id=payload.user_id,
                 perfil_json=perfil_fundido,
-                historico_onboarding=None,
+                historico_onboarding=payload.historico_sessao,
                 db=db,
             )
-            
-            # Guardar o registo da sessão para o Portfólio (Epic 6)
-            import uuid as _uuid
-            from app.models.utilizador import Sessao
-            
-            nova_sessao = Sessao(
-                utilizador_id=_uuid.UUID(payload.user_id),
-                session_id_redis=payload.session_id,
-                tema=payload.tema,
-                resumo_sessao=resumo_narrativo,
-            )
-            db.add(nova_sessao)
-            
-            # Registar que este tema foi explorado
-            await profile_service.add_tema_explorado(payload.user_id, payload.tema, db)
-            
             await db.commit()   # garante persistência no PostgreSQL antes de limpar o Redis
             perfil_atualizado = True
-            logger.info("Perfil atualizado e Sessão guardada | user=%s", payload.user_id)
+            logger.info("Perfil atualizado | user=%s", payload.user_id)
         except Exception as exc:
-            logger.exception("Erro ao guardar perfil ou sessão | user=%s", payload.user_id)
+            logger.exception("Erro ao guardar perfil | user=%s", payload.user_id)
             erro = (erro or "") + f" | Save: {exc}"
 
     # 4. Limpa Redis
@@ -571,6 +533,40 @@ async def encerrar_sessao(
         user_id=payload.user_id,
         perfil_atualizado=perfil_atualizado,
         mensagem="Sessão encerrada e perfil atualizado." if perfil_atualizado else "Sessão encerrada com erros.",
-        resumo_narrativo=resumo_narrativo or None,
         erro=erro,
     )
+
+# ---------------------------------------------------------------------------
+# POST /reformular — reformulação empática da última pergunta (uso do frontend)
+# ---------------------------------------------------------------------------
+
+class ReformularInput(BaseModel):
+    ultima_frase: str = Field(..., description="Última frase dita pelo assistente")
+
+class ReformularResponse(BaseModel):
+    reformulada: str
+
+@router.post(
+    "/reformular",
+    response_model=ReformularResponse,
+    summary="Reformula a última frase do assistente de forma empática",
+)
+async def reformular_endpoint(payload: ReformularInput):
+    """
+    Chamado pelo frontend quando o utilizador não respondeu ou o áudio falhou.
+    Usa gerar_repeticao_empatica (llama3-8b) para reformular a última pergunta
+    sem saudações nem repetições mecânicas.
+    """
+    import asyncio
+    loop = asyncio.get_event_loop()
+    try:
+        reformulada = await loop.run_in_executor(
+            None,
+            lambda: gerar_repeticao_empatica(payload.ultima_frase),
+        )
+        return ReformularResponse(reformulada=reformulada)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Não foi possível reformular a pergunta."
+        )

@@ -11,27 +11,71 @@ const CHAT_URL = `${BASE_URL}/api/v1/chat`;
 const AUTH_URL = `${BASE_URL}/api/v1/auth`;
 
 // ---------------------------------------------------------------------------
+// Sanitização de erros — nunca expor detalhes internos ao utilizador
+// ---------------------------------------------------------------------------
+
+const MENSAGENS_GENERICAS = {
+  400: "Pedido inválido. Verifique os dados introduzidos.",
+  401: "Sessão expirada. Por favor inicie sessão novamente.",
+  403: "Não tem permissão para realizar esta ação.",
+  404: "Recurso não encontrado.",
+  409: "Já existe uma conta com este email.",
+  413: "O ficheiro enviado é demasiado grande.",
+  415: "Formato de ficheiro não suportado.",
+  422: null,
+  429: "Demasiados pedidos. Aguarde um momento e tente novamente.",
+  500: "Ocorreu um erro interno. A nossa equipa foi notificada.",
+  502: "O assistente não está disponível neste momento. Tente novamente.",
+  503: "Serviço temporariamente indisponível. Tente novamente em breves instantes.",
+};
+
+async function parsearErro(res) {
+  let body = {};
+  try { body = await res.json(); } catch { /* body não é JSON */ }
+
+  const detalhe = body.detail;
+
+  // Erros de validação Pydantic (array)
+  if (Array.isArray(detalhe)) {
+    return detalhe.map(e => e.msg?.replace("Value error, ", "") || "Erro de validação").join(" ");
+  }
+
+  // Mensagem genérica por código HTTP
+  const generica = MENSAGENS_GENERICAS[res.status];
+  if (generica) return generica;
+
+  // 422 com string simples
+  if (res.status === 422 && typeof detalhe === "string") return detalhe;
+
+  return "Ocorreu um erro inesperado. Por favor tente novamente mais tarde.";
+}
+
+// ---------------------------------------------------------------------------
 // Gestão de tokens
 // ---------------------------------------------------------------------------
 
 export const TokenStorage = {
-  getAccess:   ()    => localStorage.getItem("mv_access_token"),
-  getRefresh:  ()    => localStorage.getItem("mv_refresh_token"),
-  getUserId:   ()    => localStorage.getItem("mv_user_id"),
-  getRole:     ()    => localStorage.getItem("mv_role"),
+  getAccess: () => localStorage.getItem("mv_access_token"),
+  getRefresh: () => localStorage.getItem("mv_refresh_token"),
+  getUserId: () => localStorage.getItem("mv_user_id"),
+  getRole: () => localStorage.getItem("mv_role"),
 
   save: ({ access_token, refresh_token, user_id, role }) => {
-    localStorage.setItem("mv_access_token",  access_token);
+    localStorage.setItem("mv_access_token", access_token);
     localStorage.setItem("mv_refresh_token", refresh_token);
-    localStorage.setItem("mv_user_id",       user_id);
-    localStorage.setItem("mv_role",          role);
+    localStorage.setItem("mv_user_id", user_id);
+    localStorage.setItem("mv_role", role);
   },
 
   clear: () => {
-    ["mv_access_token", "mv_refresh_token", "mv_user_id",
-     "mv_role", "mv_session_id", "mv_onboarding_done"].forEach(k =>
-      localStorage.removeItem(k)
-    );
+    [
+      "mv_access_token",
+      "mv_refresh_token",
+      "mv_user_id",
+      "mv_role",
+      "mv_session_id",
+      "mv_onboarding_done",
+    ].forEach((k) => localStorage.removeItem(k));
   },
 };
 
@@ -102,10 +146,7 @@ export const authApi = {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Credenciais incorretas.");
-    }
+    if (!res.ok) throw new Error(await parsearErro(res));
     return res.json();
   },
 
@@ -115,16 +156,13 @@ export const authApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password, nome, role }),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Erro ao criar conta.");
-    }
+    if (!res.ok) throw new Error(await parsearErro(res));
     return res.json();
   },
 
   me: async () => {
     const res = await apiFetch(`${AUTH_URL}/me`);
-    if (!res.ok) throw new Error("Sessão inválida.");
+    if (!res.ok) throw new Error(await parsearErro(res));
     return res.json();
   },
 
@@ -133,10 +171,7 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ password_atual, nova_password }),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Erro ao alterar password.");
-    }
+    if (!res.ok) throw new Error(await parsearErro(res));
     return res.json();
   },
 
@@ -170,10 +205,7 @@ export const consentimentoApi = {
         autoriza_geracao_video,
       }),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Erro ao guardar consentimento.");
-    }
+    if (!res.ok) throw new Error(await parsearErro(res));
     return res.json();
   },
 };
@@ -187,12 +219,15 @@ export const chatApi = {
     const user_id = TokenStorage.getUserId();
     const res = await apiFetch(`${CHAT_URL}/conversa/personalizada`, {
       method: "POST",
-      body: JSON.stringify({ user_id, mensagem, tema, session_id, historico: null }),
+      body: JSON.stringify({
+        user_id,
+        mensagem,
+        tema,
+        session_id,
+        historico: null,
+      }),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Erro na conversa.");
-    }
+    if (!res.ok) throw new Error(await parsearErro(res));
     return res.json();
   },
 
@@ -226,10 +261,7 @@ export const artefactosApi = {
       method: "POST",
       body: JSON.stringify({ user_id }),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Erro ao gerar livro.");
-    }
+    if (!res.ok) throw new Error(await parsearErro(res));
     return res.json();
   },
 
@@ -239,10 +271,7 @@ export const artefactosApi = {
       method: "POST",
       body: JSON.stringify({ user_id }),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Erro ao gerar timeline.");
-    }
+    if (!res.ok) throw new Error(await parsearErro(res));
     return res.json();
   },
 
@@ -252,10 +281,7 @@ export const artefactosApi = {
       method: "POST",
       body: JSON.stringify({ user_id }),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Erro ao gerar cartões.");
-    }
+    if (!res.ok) throw new Error(await parsearErro(res));
     return res.json();
   },
 
@@ -265,15 +291,11 @@ export const artefactosApi = {
       method: "POST",
       body: JSON.stringify({ user_id }),
     });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || "Erro ao gerar vídeo.");
-    }
+    if (!res.ok) throw new Error(await parsearErro(res));
     return res.json();
   },
 
-  downloadUrl: (artefactoId) =>
-    `${ARTEFACTOS_URL}/${artefactoId}/download`,
+  downloadUrl: (artefactoId) => `${ARTEFACTOS_URL}/${artefactoId}/download`,
 };
 
 export { BASE_URL, AUTH_URL, CHAT_URL, ARTEFACTOS_URL };

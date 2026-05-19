@@ -16,6 +16,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 
+from app.services.stt_normalizer import normalizar as normalizar_transcricao
 from app.services.whisper_service import (
     EXTENSOES_SUPORTADAS,
     FORMATOS_SUPORTADOS,
@@ -123,8 +124,15 @@ async def transcrever_audio(
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
 
+    # Normalizar erros fonéticos antes de devolver ao cliente
+    import asyncio
+    loop = asyncio.get_event_loop()
+    texto_normalizado = await loop.run_in_executor(
+        None, lambda: normalizar_transcricao(resultado.texto)
+    )
+
     return TranscricaoResponse(
-        texto=resultado.texto,
+        texto=texto_normalizado,
         duracao_ms=resultado.duracao_ms,
         modelo=resultado.modelo,
         idioma=resultado.idioma,

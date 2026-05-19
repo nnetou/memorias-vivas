@@ -44,7 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.services import groq_service, profile_service
 from app.services.whisper_service import transcrever
-from app.services.stt_filter import filtrar as filtrar_transcricao
+from app.services.stt_normalizer import normalizar as normalizar_transcricao, gerar_repeticao_empatica
 from app.services.tts_service import sintetizar_streaming, sintetizar, VOZ_PADRAO
 from app.services.redis_service import get_historico, append_interacao
 
@@ -113,6 +113,67 @@ async def _pedir_repeticao(
         logger.error("TTS falhou no pedir_repeticao: %s", tts_exc)
     finally:
         await _enviar_json(ws, {"type": "audio_fim"})
+
+
+# ---------------------------------------------------------------------------
+# Repetição empática via Groq — gera resposta contextual em vez de frase fixa
+# ---------------------------------------------------------------------------
+
+async def _repetir_via_groq(
+    websocket: WebSocket,
+    historico: list[dict],
+    session_id: str,
+    user_id: str,
+    tema: str,
+    voz: str,
+    perfil_db,
+    temas_anteriores: list[str],
+    db,
+) -> None:
+    """
+    Reformula a última mensagem do assistente de forma empática via
+    gerar_repeticao_empatica (llama3-8b) e envia pelo pipeline normal
+    de streaming + TTS — typewriter e sincronização áudio/texto automáticos.
+    """
+    # Extrair a última mensagem do assistente do histórico
+    ultima_msg_assistente = ""
+    for msg in reversed(historico):
+        if msg.get("role") == "assistant":
+            ultima_msg_assistente = msg.get("content", "")
+            break
+
+    loop = asyncio.get_event_loop()
+    try:
+        # Reformulação empática centralizada (llama3-8b, ~100ms)
+        texto_retry = await loop.run_in_executor(
+            None,
+            lambda: gerar_repeticao_empatica(ultima_msg_assistente),
+        )
+
+        # Enviar pelo pipeline de streaming normal
+        await _enviar_json(websocket, {"type": "resposta_inicio", "session_id": session_id})
+        # Emitir o texto de uma vez (não é streaming real, mas mantém o protocolo)
+        for char in texto_retry:
+            await _enviar_json(websocket, {"type": "resposta_chunk", "chunk": char})
+        await _enviar_json(websocket, {
+            "type": "resposta_fim",
+            "texto": texto_retry,
+            "session_id": session_id,
+        })
+
+        # TTS
+        await _enviar_json(websocket, {"type": "audio_inicio"})
+        try:
+            async for chunk_audio in sintetizar_streaming(texto_retry, voz):
+                await websocket.send_bytes(chunk_audio)
+        except Exception as exc:
+            logger.error("TTS retry falhou: %s", exc)
+        finally:
+            await _enviar_json(websocket, {"type": "audio_fim"})
+
+    except Exception as exc:
+        logger.warning("_repetir_via_groq falhou (%s) — fallback", exc)
+        await _pedir_repeticao(websocket, "vazio", voz)
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +249,15 @@ async def ws_conversa(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
                     await _pedir_repeticao(websocket, "vazio", voz)
                     continue
 
+                # Rejeitar áudio demasiado pequeno — provável silêncio
+                if len(audio_bytes) < 4000:
+                    logger.debug("WS áudio ignorado — demasiado pequeno (%d bytes)", len(audio_bytes))
+                    hist_retry = await get_historico(session_id)
+                    perfil_retry = await profile_service.get_profile(user_id, db)
+                    temas_retry  = await profile_service.get_temas_explorados(user_id, db) if perfil_retry else []
+                    await _repetir_via_groq(websocket, hist_retry, session_id, user_id, tema, voz, perfil_retry, temas_retry, db)
+                    continue
+
                 logger.info(
                     "WS áudio | user=%s | %.1f KB", user_id, len(audio_bytes) / 1024
                 )
@@ -203,14 +273,32 @@ async def ws_conversa(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
                             prompt_hint=f"tema: {tema}",
                         ),
                     )
-                    texto_utilizador = resultado_stt.texto.strip()
+                    texto_bruto = resultado_stt.texto.strip()
                 except Exception as exc:
                     await _pedir_repeticao(websocket, "stt", voz, exc)
                     continue
 
-                if not texto_utilizador:
-                    await _pedir_repeticao(websocket, "vazio", voz)
+                # Validar transcrição — rejeitar alucinações conhecidas do Whisper
+                _ALUCINACOES = {
+                    "pesquisa de pesquisa", "obrigado", "obrigado.",
+                    "legendas por", "transcrição", "subtítulos",
+                    "thanks for watching", "[música]", "[music]", "silence",
+                }
+                texto_lower = texto_bruto.lower().strip(" .")
+                if not texto_bruto or len(texto_bruto) < 3 or texto_lower in _ALUCINACOES:
+                    logger.info("WS STT alucinação detetada: %r", texto_bruto)
+                    hist_retry = await get_historico(session_id)
+                    perfil_retry = await profile_service.get_profile(user_id, db)
+                    temas_retry  = await profile_service.get_temas_explorados(user_id, db) if perfil_retry else []
+                    await _repetir_via_groq(websocket, hist_retry, session_id, user_id, tema, voz, perfil_retry, temas_retry, db)
                     continue
+
+                # ── Normalizador fonético (llama3-8b) ─────────────────────
+                # Corrige erros fonéticos do Whisper em PT-PT antes do Groq principal
+                texto_utilizador = await loop.run_in_executor(
+                    None,
+                    lambda: normalizar_transcricao(texto_bruto),
+                )
 
                 # ── Filtro STT — avalia gravidade e corrige em silêncio ────
                 resultado_filtro = await loop.run_in_executor(
