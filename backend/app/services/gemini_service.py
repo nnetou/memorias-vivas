@@ -121,7 +121,8 @@ _PERFIL_VAZIO: dict[str, Any] = {
     "tradicoes": [],
     "expressoes_regionais": [],
     "momentos_chave": [],
-    "linha_temporal": [], # Array de {"periodo": str, "acontecimento": str}
+    "linha_temporal": [],  # Array de {"periodo": str, "acontecimento": str}
+    "memorias": [],  # Array de {"titulo": str, "narrativa": str, "pessoas_envolvidas": [], "local": str|null, "emocao": str|null, "idade_ou_data": str|null}
     "resumo_narrativo": None,
     "outros": {},
 }
@@ -143,6 +144,18 @@ REGRAS:
 - Expressões regionais: palavras ou expressões típicas do dialeto/região do idoso.
 - resumo_narrativo: 1-2 parágrafos em PT-PT fluido e caloroso, na 3ª pessoa,
   descrevendo quem é esta pessoa com base na conversa.
+
+LINHA TEMPORAL (CRÍTICO):
+- Identifica TODOS os eventos/acontecimentos mencionados na conversa.
+- Para cada um, regista o período (idade, ano, ou fase da vida como "infância", "juventude").
+- Ordena cronologicamente (da idade mais jovem para a mais velha).
+- Mesmo que o idoso não tenha dito a idade exacta, estima a fase da vida (ex: "infância", "adolescência", "20s", "30s").
+
+MEMÓRIAS INDIVIDUAIS (CRÍTICO):
+- Identifica cada memória/história concreta partilhada na conversa como uma entrada SEPARADA no array "memorias".
+- Cada memória deve ter: título evocativo, narrativa curta em prosa (50-80 palavras), pessoas envolvidas, local, emoção dominante, e idade/data se mencionada.
+- Uma conversa pode conter 1 a 5+ memórias distintas. NÃO as fundes numa só.
+
 - Responde APENAS com o JSON, sem texto adicional, sem blocos markdown.
 
 SCHEMA (devolve este objeto preenchido):
@@ -161,8 +174,18 @@ SCHEMA (devolve este objeto preenchido):
   "momentos_chave": [],
   "linha_temporal": [
     {{
-      "periodo": "Ex: 22 anos, 1975, ou infância",
-      "acontecimento": "Descrição factual do evento marcante"
+      "periodo": "Ex: 8 anos, 1975, infância, juventude",
+      "acontecimento": "Descrição factual e concisa do evento marcante"
+    }}
+  ],
+  "memorias": [
+    {{
+      "titulo": "Título evocativo curto (ex: O Dia da Primeira Bicicleta)",
+      "narrativa": "Narrativa curta e calorosa de 50-80 palavras em prosa, na 3ª pessoa, contando esta memória específica.",
+      "pessoas_envolvidas": ["nomes das pessoas presentes nesta memória"],
+      "local": "local onde aconteceu (ou null)",
+      "emocao": "emoção dominante: alegria, saudade, orgulho, nostalgia, etc.",
+      "idade_ou_data": "idade ou ano aproximado (ou null)"
     }}
   ],
   "resumo_narrativo": null,
@@ -377,6 +400,8 @@ REGRAS:
 - Preserva todos os factos de ambos os perfis.
 - Em caso de conflito, prefere a informação mais recente (NOVOS FACTOS).
 - Sem duplicados em listas.
+- "linha_temporal": une TODOS os eventos de ambos os perfis, remove duplicados e ordena cronologicamente.
+- "memorias": une TODAS as memórias de ambos os perfis, sem perder nenhuma. Cada memória é uma entrada distinta.
 - Mantém o schema exatamente igual ao fornecido.
 - Responde APENAS com o JSON, sem texto adicional.
 
@@ -394,6 +419,12 @@ SCHEMA:
   "tradicoes": [],
   "expressoes_regionais": [],
   "momentos_chave": [],
+  "linha_temporal": [
+    {{"periodo": "idade ou ano", "acontecimento": "descrição"}}
+  ],
+  "memorias": [
+    {{"titulo": "...", "narrativa": "...", "pessoas_envolvidas": [], "local": null, "emocao": null, "idade_ou_data": null}}
+  ],
   "resumo_narrativo": null,
   "outros": {{}}
 }}
@@ -546,3 +577,55 @@ async def resumir_cartao(resumo_sessao: str) -> dict[str, str]:
         
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, _resumir_cartao_sync, resumo_sessao)
+
+
+# ---------------------------------------------------------------------------
+# Gerar capítulo do livro de memórias (reescrita narrativa literária)
+# ---------------------------------------------------------------------------
+
+_PROMPT_CAPITULO = """\
+Reescreve o resumo de sessão abaixo como um CAPÍTULO de um livro de memórias biográfico \
+em Português de Portugal (PT-PT).
+
+REGRAS:
+- Tom: documental, biográfico, caloroso e respeitoso. Na 3ª pessoa.
+- NÃO uses tom de conto de fadas, romance ficcional ou fábula.
+- NÃO inventes factos que não estejam no resumo original.
+- Escreve prosa corrida fluida, sem listas nem emojis.
+- Comprimento: 150-300 palavras — um capítulo curto mas rico.
+- O nome da pessoa é "{nome}".
+
+Responde APENAS com um objeto JSON:
+{{
+  "titulo_capitulo": "Título evocativo e literário para este capítulo",
+  "conteudo": "O texto narrativo do capítulo em prosa corrida..."
+}}
+
+RESUMO DA SESSÃO:
+{resumo}
+"""
+
+
+def _gerar_capitulo_sync(resumo: str, nome: str) -> dict[str, str]:
+    """Reescreve um resumo de sessão como capítulo narrativo do livro."""
+    prompt = _PROMPT_CAPITULO.format(resumo=resumo, nome=nome)
+    config = genai_types.GenerateContentConfig(
+        response_mime_type="application/json",
+        temperature=0.7,
+        max_output_tokens=2048,
+    )
+    try:
+        resposta = _generate_with_fallback(prompt, config)
+        raw = _clean_json_response(resposta.text)
+        return json.loads(raw)
+    except Exception as exc:
+        logger.warning("Falha ao gerar capítulo via Gemini: %s — fallback", exc)
+        # Fallback: título genérico + resumo tal como está
+        return {"titulo_capitulo": "Recordações", "conteudo": resumo}
+
+
+async def gerar_capitulo_livro(resumo: str, nome: str) -> dict[str, str]:
+    """Interface assíncrona para gerar capítulo do livro."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _gerar_capitulo_sync, resumo, nome)
+

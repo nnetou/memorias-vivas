@@ -196,6 +196,16 @@ Schema JSON (usa null ou arrays vazios [] quando não houver informação corres
       "acontecimento": "Descrição breve do acontecimento"
     }}
   ],
+  "memorias": [
+    {{
+      "titulo": "Título evocativo curto",
+      "narrativa": "Narrativa curta de 50-80 palavras em prosa, na 3ª pessoa.",
+      "pessoas_envolvidas": [],
+      "local": null,
+      "emocao": null,
+      "idade_ou_data": null
+    }}
+  ],
   "resumo_narrativo": null,
   "outros": {{}}
 }}
@@ -249,7 +259,8 @@ Conversa:
             "profissao": None, "memoria_marcante": None,
             "pessoas": [], "locais": [], "datas_aproximadas": [],
             "eventos_marcantes": [], "tradicoes": [], "expressoes_regionais": [],
-            "momentos_chave": [], "resumo_narrativo": None, "outros": {},
+            "momentos_chave": [], "linha_temporal": [], "memorias": [],
+            "resumo_narrativo": None, "outros": {},
         }
     except Exception as exc:
         logger.error("Fallback Groq | Erro na extração de perfil: %s", exc)

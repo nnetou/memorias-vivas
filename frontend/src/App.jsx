@@ -47,6 +47,7 @@ const LoadingScreen = () => (
 // ---------------------------------------------------------------------------
 function AppAutenticado({ utilizador, logout }) {
   const [tabActiva, setTabActiva] = useState("inicio");
+  const [conversaAtiva, setConversaAtiva] = useState(false);
 
   // Onboarding ainda não completo — fluxo dedicado sem bottom nav
   if (!utilizador.onboarding_completo) {
@@ -56,7 +57,7 @@ function AppAutenticado({ utilizador, logout }) {
   const renderTab = () => {
     switch (tabActiva) {
       case "inicio":
-        return <DashboardScreen />;
+        return <DashboardScreen onConversaAtivaChange={setConversaAtiva} />;
       case "portfolio":
         return <PortfolioScreen />;
       case "perfil":
@@ -69,7 +70,7 @@ function AppAutenticado({ utilizador, logout }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100dvh" }}>
       {renderTab()}
-      <BottomNav tabActiva={tabActiva} onChange={setTabActiva} />
+      {!conversaAtiva && <BottomNav tabActiva={tabActiva} onChange={setTabActiva} />}
     </div>
   );
 }

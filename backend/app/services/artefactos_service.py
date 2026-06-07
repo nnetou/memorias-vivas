@@ -70,6 +70,7 @@ def _perfil_safe(perfil_json: dict | None) -> dict:
         "pessoas": [], "locais": [], "datas_aproximadas": [],
         "eventos_marcantes": [], "tradicoes": [], "expressoes_regionais": [],
         "momentos_chave": [], "resumo_narrativo": None, "outros": {},
+        "linha_temporal": [], "memorias": [],
     }
     return {**defaults, **p}
 
@@ -85,21 +86,34 @@ def _gerar_livro_pdf_sync(
     nome: str,
 ) -> Path:
     from weasyprint import HTML as WPhtml
+    from app.services.gemini_service import _gerar_capitulo_sync
 
     p = _perfil_safe(perfil_json)
     env = _jinja_env()
     tmpl = env.get_template("livro_memorias.html")
 
-    sessoes_ctx = [
-        {
-            "tema_label": TEMAS_LABELS.get(s.get("tema", "geral"), s.get("tema", "")),
-            "titulo": f"{TEMAS_LABELS.get(s.get('tema','geral'), '')} — recordações",
-            "resumo": s.get("resumo_sessao") or "",
-            "data": s.get("criada_em", ""),
-        }
-        for s in sessoes
-        if s.get("resumo_sessao")
-    ]
+    # Gerar capítulos narrativos via Gemini (reescrita literária)
+    sessoes_ctx = []
+    for s in sessoes:
+        resumo = s.get("resumo_sessao")
+        if not resumo or not resumo.strip():
+            continue
+        try:
+            capitulo = _gerar_capitulo_sync(resumo, nome)
+            sessoes_ctx.append({
+                "tema_label": TEMAS_LABELS.get(s.get("tema", "geral"), s.get("tema", "")),
+                "titulo": capitulo.get("titulo_capitulo", "Recordações"),
+                "resumo": capitulo.get("conteudo", resumo),
+                "data": s.get("criada_em", ""),
+            })
+        except Exception as exc:
+            logger.warning("Falha ao gerar capítulo: %s — a usar resumo original", exc)
+            sessoes_ctx.append({
+                "tema_label": TEMAS_LABELS.get(s.get("tema", "geral"), s.get("tema", "")),
+                "titulo": f"{TEMAS_LABELS.get(s.get('tema','geral'), '')} — recordações",
+                "resumo": resumo,
+                "data": s.get("criada_em", ""),
+            })
 
     html_str = tmpl.render(
         nome=nome or "Memórias",
@@ -168,6 +182,29 @@ def _gerar_timeline_html_sync(
             else:
                 eventos.append({"tipo": "data", "descricao": da, "periodo": da})
 
+    # Ordenar cronologicamente: extrair número de período (idade ou ano)
+    import re
+    _FASE_ORDEM = {
+        "nascimento": 0, "infância": 5, "infancia": 5, "adolescência": 14, "adolescencia": 14,
+        "juventude": 20, "20s": 25, "30s": 35, "40s": 45, "50s": 55,
+        "60s": 65, "70s": 75, "80s": 85, "90s": 95, "reforma": 65, "velhice": 75,
+    }
+    def _sort_key(ev):
+        periodo = (ev.get("periodo") or "").strip().lower()
+        # Tentar extrair número
+        nums = re.findall(r'\d+', periodo)
+        if nums:
+            n = int(nums[0])
+            # Se for um ano (ex: 1975), converter para algo ordenavel (>100 = ano)
+            return n
+        # Tentar mapear fase da vida
+        for fase, ordem in _FASE_ORDEM.items():
+            if fase in periodo:
+                return ordem
+        return 999  # sem data = no fim
+
+    eventos.sort(key=_sort_key)
+
     items_html = ""
     for i, ev in enumerate(eventos):
         side = "left" if i % 2 == 0 else "right"
@@ -207,7 +244,7 @@ def _gerar_timeline_html_sync(
   .timeline-dot{{position:absolute;left:50%;top:12px;width:14px;height:14px;border-radius:50%;transform:translateX(-50%);border:2px solid #FAF7F2;box-shadow:0 0 0 2px #c9a84c}}
   .timeline-content{{background:#fff;border:1px solid #e8e0d5;padding:20px 24px;max-width:360px;box-shadow:0 2px 8px rgba(0,0,0,.05)}}
   .timeline-content:hover{{border-color:#1e3a5f;transform:translateY(-2px);transition:all .2s}}
-  .timeline-periodo{{display:block;font-size:.75rem;letter-spacing:2px;text-transform:uppercase;color:#c9a84c;margin-bottom:8px}}
+  .timeline-periodo{{display:block;font-size:.75rem;letter-spacing:2px;text-transform:uppercase;color:#c9a84c;margin-bottom:8px;font-weight:600}}
   .timeline-desc{{font-size:1rem;line-height:1.7;color:#2a2a4e}}
   .empty{{text-align:center;color:#aaa;font-size:1.1rem;padding:60px 20px}}
   footer{{text-align:center;padding:40px;color:#bbb;font-size:.85rem;letter-spacing:1px;border-top:1px solid #e8e0d5;margin-top:40px}}
@@ -266,29 +303,42 @@ def _gerar_cartoes_pdf_sync(
     tmpl = env.get_template("story_card.html")
 
     cartoes = []
-    from app.services.gemini_service import _resumir_cartao_sync
-    for s in sessoes:
-        resumo = s.get("resumo_sessao")
-        # Se a sessão não tiver resumo, não a incluímos nos cartões
-        if not resumo or not resumo.strip():
-            continue
-            
-        tema = s.get("tema", "geral")
-        # Obter resumo curto e título estruturado para o cartão
-        cartao_dados = _resumir_cartao_sync(resumo)
-        
-        cartoes.append({
-            "tema_label": TEMAS_LABELS.get(tema, tema),
-            "titulo": cartao_dados.get("titulo") or "Uma Recordação Especial",
-            "resumo": cartao_dados.get("resumo_curto") or resumo,
-            "facto_destaque": {
-                "terra_natal": p["terra_natal"],
-                "profissao": p["profissao"],
-                "data": p["datas_aproximadas"][0] if p["datas_aproximadas"] else None,
-            },
-        })
+    memorias = p.get("memorias") or []
 
-    # Garante pelo menos um cartão mesmo sem sessões
+    if memorias:
+        # Usar memórias individuais extraídas do perfil
+        for mem in memorias:
+            cartoes.append({
+                "tema_label": (mem.get("emocao") or "Memória").capitalize(),
+                "titulo": mem.get("titulo") or "Uma Recordação Especial",
+                "resumo": mem.get("narrativa") or "Uma memória guardada com carinho.",
+                "facto_destaque": {
+                    "terra_natal": mem.get("local") or p["terra_natal"],
+                    "profissao": p["profissao"],
+                    "data": mem.get("idade_ou_data"),
+                },
+            })
+    else:
+        # Fallback: usar sessões como antes (para perfis antigos)
+        from app.services.gemini_service import _resumir_cartao_sync
+        for s in sessoes:
+            resumo = s.get("resumo_sessao")
+            if not resumo or not resumo.strip():
+                continue
+            tema = s.get("tema", "geral")
+            cartao_dados = _resumir_cartao_sync(resumo)
+            cartoes.append({
+                "tema_label": TEMAS_LABELS.get(tema, tema),
+                "titulo": cartao_dados.get("titulo") or "Uma Recordação Especial",
+                "resumo": cartao_dados.get("resumo_curto") or resumo,
+                "facto_destaque": {
+                    "terra_natal": p["terra_natal"],
+                    "profissao": p["profissao"],
+                    "data": p["datas_aproximadas"][0] if p["datas_aproximadas"] else None,
+                },
+            })
+
+    # Garante pelo menos um cartão mesmo sem memórias
     if not cartoes:
         cartoes.append({
             "tema_label": "Memórias",

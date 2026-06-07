@@ -36,8 +36,8 @@ VOZES_DISPONIVEIS = {
     "duarte":  "pt-PT-DuarteNeural",   # masculina
 }
 
-# Parâmetros de prosódia — fala mais pausada para idosos
-RATE  = "-10%"   # ligeiramente mais lento que o padrão
+# Parâmetros de prosódia
+RATE  = "+10%"   # ligeiramente mais rápido que o padrão
 PITCH = "+0Hz"   # tom neutro
 
 
@@ -99,22 +99,12 @@ async def sintetizar(
     voz: str = VOZ_PADRAO,
 ) -> bytes:
     """
-    Converte texto em áudio MP3 em PT-PT.
-    Se ELEVENLABS_API_KEY estiver configurada, usa ElevenLabs.
-    Caso contrário, ou em caso de erro, usa edge-tts como fallback robusto.
+    Converte texto em áudio MP3 em PT-PT usando edge-tts (Microsoft Neural TTS).
     """
     if not texto or not texto.strip():
         raise ValueError("Texto vazio — nada a sintetizar.")
 
-    # ── Tentativa 1: ElevenLabs (se API Key configurada) ──────────────────
-    if settings.ELEVENLABS_API_KEY:
-        try:
-            logger.info("TTS ElevenLabs | chars=%d | voice_id=%s", len(texto), settings.ELEVENLABS_VOICE_ID)
-            return await _sintetizar_elevenlabs(texto)
-        except Exception as exc:
-            logger.warning("ElevenLabs falhou (%s) — a usar edge-tts como fallback.", exc)
-
-    # ── Tentativa 2: edge-tts (Padrão / Fallback) ─────────────────────────
+    # ── edge-tts (Microsoft Neural TTS) ───────────────────────────────────
     # Resolver nome curto → nome completo
     voz_resolvida = VOZES_DISPONIVEIS.get(voz.lower(), voz)
 
@@ -156,23 +146,12 @@ async def sintetizar_streaming(
 ) -> AsyncGenerator[bytes, None]:
     """
     Versão streaming — emite chunks de áudio MP3 à medida que são gerados.
-    Se ELEVENLABS_API_KEY estiver configurada, usa ElevenLabs.
-    Caso contrário, ou em caso de erro, usa edge-tts como fallback robusto.
+    Usa sempre edge-tts (Microsoft Neural TTS).
     """
     if not texto or not texto.strip():
         raise ValueError("Texto vazio.")
 
-    # ── Tentativa 1: ElevenLabs (se API Key configurada) ──────────────────
-    if settings.ELEVENLABS_API_KEY:
-        try:
-            logger.info("TTS ElevenLabs Streaming | chars=%d", len(texto))
-            async for chunk in _sintetizar_streaming_elevenlabs(texto):
-                yield chunk
-            return
-        except Exception as exc:
-            logger.warning("ElevenLabs Streaming falhou (%s) — a usar edge-tts como fallback.", exc)
-
-    # ── Tentativa 2: edge-tts (Padrão / Fallback) ─────────────────────────
+    # ── edge-tts (Microsoft Neural TTS) ───────────────────────────────────
     voz_resolvida = VOZES_DISPONIVEIS.get(voz.lower(), voz)
 
     communicate = edge_tts.Communicate(

@@ -177,6 +177,102 @@ async def _repetir_via_groq(
 
 
 # ---------------------------------------------------------------------------
+# Processar Groq e TTS
+# ---------------------------------------------------------------------------
+
+async def _gerar_e_enviar_resposta(
+    websocket: WebSocket,
+    session_id: str,
+    user_id: str,
+    tema: str,
+    voz: str,
+    texto_para_groq: str,
+    db: AsyncSession,
+) -> None:
+    """Passa o texto pelo Groq e envia a resposta (texto + áudio) em streaming."""
+    historico = await get_historico(session_id)
+    perfil_db = await profile_service.get_profile(user_id, db)
+
+    try:
+        temas_anteriores = []
+        if perfil_db:
+            temas_anteriores = await profile_service.get_temas_explorados(
+                user_id, db
+            )
+
+        # Escolher o gerador de stream correto
+        if perfil_db:
+            stream_gen = groq_service.conversa_personalizada_stream(
+                mensagem=texto_para_groq,
+                tema=tema,
+                perfil_json=perfil_db.perfil_json,
+                temas_anteriores=temas_anteriores,
+                historico=historico,
+            )
+        else:
+            stream_gen = groq_service.chat_stream(
+                mensagem=texto_para_groq,
+                historico=historico,
+                tema=tema,
+            )
+
+        # Notifica o frontend que vai começar a receber texto
+        await _enviar_json(websocket, {
+            "type": "resposta_inicio",
+            "session_id": session_id,
+        })
+
+        # Stream do texto — cada chunk enviado imediatamente ao frontend
+        chunks_texto: list[str] = []
+        loop = asyncio.get_event_loop()
+
+        async def _consumir_stream():
+            for chunk in stream_gen:
+                chunks_texto.append(chunk)
+                await _enviar_json(websocket, {
+                    "type": "resposta_chunk",
+                    "chunk": chunk,
+                })
+
+        await _consumir_stream()
+        texto_assistente = "".join(chunks_texto)
+
+        await _enviar_json(websocket, {
+            "type": "resposta_fim",
+            "texto": texto_assistente,
+            "session_id": session_id,
+        })
+
+    except Exception as exc:
+        await _pedir_repeticao(websocket, "ia", voz, exc)
+        return
+
+    # Persiste no Redis se for uma mensagem do utilizador (não prompt de sistema escondido)
+    if not texto_para_groq.startswith("("):
+        await append_interacao(session_id, texto_para_groq, texto_assistente)
+    else:
+        # Apenas adicionamos a resposta da assistente para manter o contexto
+        await append_interacao(session_id, "", texto_assistente)
+
+    # ── 3. TTS ────────────────────────────────────────────────
+    await _enviar_json(websocket, {"type": "audio_inicio"})
+    tts_ok = True
+    try:
+        async for chunk in sintetizar_streaming(texto_assistente, voz):
+            await websocket.send_bytes(chunk)
+    except Exception as exc:
+        logger.error("WS TTS falhou: %s", exc)
+        tts_ok = False
+    finally:
+        await _enviar_json(websocket, {"type": "audio_fim"})
+
+    if not tts_ok:
+        await _pedir_repeticao(websocket, "ia", voz)
+
+    logger.info("WS ciclo OK | user=%s | session=%s", user_id, session_id)
+
+
+# ---------------------------------------------------------------------------
 # WebSocket /ws/conversa
 # ---------------------------------------------------------------------------
 
@@ -229,6 +325,12 @@ async def ws_conversa(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
                         "session_id": session_id,
                         "mensagem": "Sessão iniciada. Pode começar a falar.",
                     })
+
+                    # Se for uma nova sessão (sem histórico), a Raquel inicia a conversa
+                    historico_sessao = await get_historico(session_id)
+                    if not historico_sessao:
+                        texto_init = f"(O utilizador acabou de entrar na conversa. Inicia a conversa com uma saudação calorosa, curta e acolhedora sobre o tema '{tema}'. Faz-lhe uma pergunta convidativa.)"
+                        await _gerar_e_enviar_resposta(websocket, session_id, user_id, tema, voz, texto_init, db)
 
                 elif tipo == "ping":
                     await _enviar_json(websocket, {"type": "pong"})
@@ -313,85 +415,8 @@ async def ws_conversa(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
                     texto_utilizador[:80],
                 )
 
-                # ── 2. Groq (streaming) ──────────────────────────────────
-                historico = await get_historico(session_id)
-                perfil_db = await profile_service.get_profile(user_id, db)
-
-                try:
-                    temas_anteriores = []
-                    if perfil_db:
-                        temas_anteriores = await profile_service.get_temas_explorados(
-                            user_id, db
-                        )
-
-                    # Escolher o gerador de stream correto
-                    if perfil_db:
-                        stream_gen = groq_service.conversa_personalizada_stream(
-                            mensagem=texto_para_groq,
-                            tema=tema,
-                            perfil_json=perfil_db.perfil_json,
-                            temas_anteriores=temas_anteriores,
-                            historico=historico,
-                        )
-                    else:
-                        stream_gen = groq_service.chat_stream(
-                            mensagem=texto_para_groq,
-                            historico=historico,
-                            tema=tema,
-                        )
-
-                    # Notifica o frontend que vai começar a receber texto
-                    await _enviar_json(websocket, {
-                        "type": "resposta_inicio",
-                        "session_id": session_id,
-                    })
-
-                    # Stream do texto — cada chunk enviado imediatamente ao frontend
-                    chunks_texto: list[str] = []
-                    loop = asyncio.get_event_loop()
-
-                    async def _consumir_stream():
-                        for chunk in stream_gen:
-                            chunks_texto.append(chunk)
-                            await _enviar_json(websocket, {
-                                "type": "resposta_chunk",
-                                "chunk": chunk,
-                            })
-
-                    await _consumir_stream()
-                    texto_assistente = "".join(chunks_texto)
-
-                    await _enviar_json(websocket, {
-                        "type": "resposta_fim",
-                        "texto": texto_assistente,
-                        "session_id": session_id,
-                    })
-
-                except Exception as exc:
-                    await _pedir_repeticao(websocket, "ia", voz, exc)
-                    continue
-
-                # Persiste no Redis
-                await append_interacao(session_id, texto_para_groq, texto_assistente)
-
-                # ── 3. TTS ────────────────────────────────────────────────
-                await _enviar_json(websocket, {"type": "audio_inicio"})
-                tts_ok = True
-                try:
-                    async for chunk in sintetizar_streaming(texto_assistente, voz):
-                        await websocket.send_bytes(chunk)
-                except Exception as exc:
-                    logger.error("WS TTS falhou: %s", exc)
-                    tts_ok = False
-                finally:
-                    await _enviar_json(websocket, {"type": "audio_fim"})
-
-                if not tts_ok:
-                    # Texto já foi entregue via {"type":"resposta"} — frontend pode mostrá-lo
-                    # Pedimos repetição apenas para o ciclo seguinte
-                    await _pedir_repeticao(websocket, "ia", voz)
-
-                logger.info("WS ciclo OK | user=%s | session=%s", user_id, session_id)
+                # ── 2. Groq (streaming) e 3. TTS ─────────────────────────
+                await _gerar_e_enviar_resposta(websocket, session_id, user_id, tema, voz, texto_para_groq, db)
 
     except WebSocketDisconnect:
         logger.info("WS desligado | user=%s | session=%s", user_id, session_id)

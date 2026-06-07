@@ -74,13 +74,14 @@ class EstadoMerge(TypedDict):
 
 _MERGE_PROMPT = """\
 Funde os dois perfis biográficos em JSON. Sem duplicados. Preserva todos os factos. PT-PT.
-Certifica-te de que o array "linha_temporal" contendo objetos com {"periodo": "...", "acontecimento": "..."} é fundido corretamente, unindo e ordenando cronologicamente os eventos sempre que possível.
+Certifica-te de que o array "linha_temporal" contendo objetos com {{"periodo": "...", "acontecimento": "..."}} é fundido corretamente, unindo e ordenando cronologicamente os eventos sempre que possível.
+Certifica-te de que o array "memorias" contendo objetos com {{"titulo": "...", "narrativa": "...", "pessoas_envolvidas": [], "local": null, "emocao": null, "idade_ou_data": null}} é fundido corretamente, sem perder nenhuma memória.
 
 PERFIL EXISTENTE: {perfil_antigo}
 NOVOS FACTOS: {resumo_sessao}
 
 Responde APENAS com JSON, sem texto extra:
-{{"nome":null,"terra_natal":null,"familia":null,"profissao":null,"memoria_marcante":null,"pessoas":[],"locais":[],"datas_aproximadas":[],"eventos_marcantes":[],"tradicoes":[],"expressoes_regionais":[],"momentos_chave":[],"linha_temporal":[],"resumo_narrativo":null,"outros":{{}}}}
+{{"nome":null,"terra_natal":null,"familia":null,"profissao":null,"memoria_marcante":null,"pessoas":[],"locais":[],"datas_aproximadas":[],"eventos_marcantes":[],"tradicoes":[],"expressoes_regionais":[],"momentos_chave":[],"linha_temporal":[],"memorias":[],"resumo_narrativo":null,"outros":{{}}}}
 """
 
 

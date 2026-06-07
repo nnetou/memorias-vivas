@@ -377,3 +377,411 @@ body {
   text-align: center;
   letter-spacing: 0.03em;
 }
+
+/* ============================================================
+   MASCOTE E VÍDEOCHAMADA INTERATIVA (DUOLINGO STYLE)
+   ============================================================ */
+
+.video-call-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  height: 100%;
+}
+
+@media(min-width: 768px) {
+  .video-call-layout {
+    flex-direction: row;
+  }
+}
+
+.companion-panel {
+  background: radial-gradient(circle at center, var(--azul-medio) 0%, var(--azul-escuro) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 1.5rem;
+  overflow: hidden;
+  flex: 0 0 58%; /* Bloqueia rigorosamente a 58% de altura no telemóvel para não encolher */
+  height: 58%;
+}
+
+@media(min-width: 768px) {
+  .companion-panel {
+    flex: 0 0 55%; /* Bloqueia a 55% de largura no desktop */
+    height: 100%;
+  }
+}
+
+.avatar-halo {
+  width: 230px;
+  height: 230px;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+@media(min-width: 768px) {
+  .avatar-halo {
+    width: 320px;
+    height: 320px;
+  }
+}
+
+/* Efeito de brilho pulsante no halo do avatar */
+.avatar-halo::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
+  border: 2.5px dashed rgba(255, 255, 255, 0.15);
+  animation: mascote-rotate 20s linear infinite;
+  pointer-events: none;
+}
+
+.avatar-halo.speaking {
+  box-shadow: 0 0 60px rgba(168, 85, 247, 0.7), 0 0 120px rgba(168, 85, 247, 0.3), inset 0 0 30px rgba(168, 85, 247, 0.4);
+  background: rgba(168, 85, 247, 0.12);
+  animation: halo-speaking-pulse 0.55s ease-in-out infinite alternate;
+}
+
+.avatar-halo.speaking-happy {
+  box-shadow: 0 0 60px rgba(251, 191, 36, 0.7), 0 0 120px rgba(251, 191, 36, 0.3), inset 0 0 30px rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.1);
+  animation: halo-happy-pulse 0.45s ease-in-out infinite alternate;
+}
+
+.avatar-halo.speaking-sad {
+  box-shadow: 0 0 50px rgba(99, 102, 241, 0.5), inset 0 0 20px rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.avatar-halo.speaking::after {
+  border-color: rgba(168, 85, 247, 0.7);
+  animation-duration: 5s;
+}
+
+.avatar-halo.speaking-happy::after {
+  border-color: rgba(251, 191, 36, 0.7);
+  animation-duration: 3s;
+}
+
+.avatar-halo.listening {
+  box-shadow: 0 0 60px rgba(6, 182, 212, 0.7), inset 0 0 30px rgba(6, 182, 212, 0.5);
+  background: rgba(6, 182, 212, 0.12);
+  animation: mascote-pulse-listening 1.2s ease-in-out infinite alternate;
+}
+
+.avatar-halo.listening::after {
+  border-color: rgba(6, 182, 212, 0.7);
+  animation-duration: 6s;
+}
+
+.avatar-halo.thinking {
+  box-shadow: 0 0 50px rgba(234, 179, 8, 0.6), inset 0 0 25px rgba(234, 179, 8, 0.4);
+  background: rgba(234, 179, 8, 0.1);
+  animation: halo-think-pulse 1.2s ease-in-out infinite;
+}
+
+.avatar-halo.thinking::after {
+  border-color: rgba(234, 179, 8, 0.7);
+  border-style: dotted;
+  animation-duration: 3s;
+}
+
+.avatar-halo.idle {
+  box-shadow: 0 0 40px rgba(255, 255, 255, 0.12);
+}
+
+.avatar-halo.idle-happy {
+  box-shadow: 0 0 40px rgba(251, 191, 36, 0.2);
+}
+
+@keyframes halo-speaking-pulse {
+  from { box-shadow: 0 0 40px rgba(168, 85, 247, 0.5), inset 0 0 20px rgba(168, 85, 247, 0.3); transform: scale(1.0); }
+  to   { box-shadow: 0 0 80px rgba(168, 85, 247, 0.9), inset 0 0 40px rgba(168, 85, 247, 0.5); transform: scale(1.04); }
+}
+
+@keyframes halo-happy-pulse {
+  from { box-shadow: 0 0 40px rgba(251, 191, 36, 0.5), inset 0 0 20px rgba(251, 191, 36, 0.3); transform: scale(1.0); }
+  to   { box-shadow: 0 0 90px rgba(251, 191, 36, 1.0), inset 0 0 45px rgba(251, 191, 36, 0.6); transform: scale(1.06); }
+}
+
+@keyframes halo-think-pulse {
+  0%, 100% { box-shadow: 0 0 30px rgba(234, 179, 8, 0.4); }
+  50%      { box-shadow: 0 0 70px rgba(234, 179, 8, 0.8), inset 0 0 30px rgba(234, 179, 8, 0.4); }
+}
+
+/* Animações da Raquel (SVG) */
+.mascote-svg {
+  width: 200px;
+  height: 200px;
+  transform-origin: bottom center;
+  animation: mascote-breath 3.5s ease-in-out infinite;
+  filter: drop-shadow(0 8px 24px rgba(0,0,0,0.25));
+  transition: filter 0.5s;
+}
+
+@media(min-width: 768px) {
+  .mascote-svg {
+    width: 280px;
+    height: 280px;
+  }
+}
+
+/* Estado speaking — cabeça a abanar com entusiasmo */
+.mascote-svg.speaking {
+  animation: mascote-nod 0.55s ease-in-out infinite;
+  filter: drop-shadow(0 8px 32px rgba(168, 85, 247, 0.45));
+}
+
+/* Estado speaking-happy — bounce enérgico */
+.mascote-svg.speaking-happy {
+  animation: mascote-bounce 0.45s ease-in-out infinite alternate;
+  filter: drop-shadow(0 8px 32px rgba(251, 191, 36, 0.55));
+}
+
+/* Estado speaking-sad — oscilação lenta e empática */
+.mascote-svg.speaking-sad {
+  animation: mascote-sway 1.8s ease-in-out infinite;
+  filter: drop-shadow(0 8px 32px rgba(99, 102, 241, 0.35));
+}
+
+/* Estado listening — inclinação de atenção */
+.mascote-svg.listening {
+  animation: mascote-lean 2s ease-in-out infinite alternate;
+  filter: drop-shadow(0 8px 32px rgba(6, 182, 212, 0.45));
+}
+
+/* Estado thinking — balanço pensativo */
+.mascote-svg.thinking {
+  animation: mascote-think 1.2s ease-in-out infinite;
+  filter: drop-shadow(0 8px 32px rgba(234, 179, 8, 0.45));
+}
+
+/* Estado idle — respiração suave */
+.mascote-svg.idle,
+.mascote-svg.idle-happy,
+.mascote-svg.idle-sad {
+  animation: mascote-breath 3.5s ease-in-out infinite;
+}
+
+/* Keyframes principais */
+@keyframes mascote-breath {
+  0%, 100% { transform: scale(1) translateY(0px); }
+  50%      { transform: scale(1.045) translateY(-5px); }
+}
+
+@keyframes mascote-nod {
+  0%   { transform: rotate(-4deg) translateY(-2px) scale(1.02); }
+  25%  { transform: rotate(0deg) translateY(-5px) scale(1.04); }
+  50%  { transform: rotate(4deg) translateY(-2px) scale(1.02); }
+  75%  { transform: rotate(0deg) translateY(0px) scale(1.00); }
+  100% { transform: rotate(-4deg) translateY(-2px) scale(1.02); }
+}
+
+@keyframes mascote-bounce {
+  0%   { transform: translateY(0px) scale(1.0) rotate(-2deg); }
+  100% { transform: translateY(-14px) scale(1.06) rotate(2deg); }
+}
+
+@keyframes mascote-sway {
+  0%, 100% { transform: rotate(-3deg) translateY(0px); }
+  50%      { transform: rotate(3deg) translateY(-3px); }
+}
+
+@keyframes mascote-lean {
+  0%   { transform: rotate(-6deg) scale(1.02); }
+  100% { transform: rotate(2deg) scale(1.04); }
+}
+
+@keyframes mascote-think {
+  0%, 100% { transform: translateY(0px) rotate(-2deg); }
+  33%      { transform: translateY(-8px) rotate(0deg); }
+  66%      { transform: translateY(-4px) rotate(2deg); }
+}
+
+@keyframes mascote-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes mascote-pulse-listening {
+  0%   { box-shadow: 0 0 20px rgba(6, 182, 212, 0.3); transform: scale(1); }
+  100% { box-shadow: 0 0 70px rgba(6, 182, 212, 0.9), inset 0 0 30px rgba(6, 182, 212, 0.5); transform: scale(1.04); }
+}
+
+/* Olhos a piscar — mais frequente e expressivo */
+.mascote-olho {
+  animation: mascote-blink 3.5s infinite;
+  transform-origin: center;
+}
+
+@keyframes mascote-blink {
+  0%, 90%, 95%, 100% { transform: scaleY(1); }
+  92%, 93%           { transform: scaleY(0.05); }
+}
+
+/* Boca a falar — mais rápida e variada */
+.mascote-boca-falante {
+  animation: mascote-talk 0.38s infinite ease-in-out;
+  transform-origin: 100px 107px;
+}
+
+@keyframes mascote-talk {
+  0%   { transform: scale(1, 0.15); }
+  15%  { transform: scale(1.25, 1.0); }
+  30%  { transform: scale(0.8, 1.5); }
+  45%  { transform: scale(1.2, 0.4); }
+  60%  { transform: scale(0.85, 1.1); }
+  75%  { transform: scale(1.3, 1.3); }
+  90%  { transform: scale(1.0, 0.6); }
+  100% { transform: scale(1, 0.15); }
+}
+
+/* Boca a falar de forma triste e empática */
+.mascote-boca-falante-triste {
+  animation: mascote-talk-sad 0.7s infinite ease-in-out;
+  transform-origin: 100px 109px;
+}
+
+@keyframes mascote-talk-sad {
+  0%   { transform: scale(0.85, 0.2); }
+  40%  { transform: scale(1.1, 0.7); }
+  70%  { transform: scale(0.95, 0.45); }
+  100% { transform: scale(0.85, 0.2); }
+}
+
+/* Sparkles / Partículas flutuantes */
+.mascote-sparkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.sparkle {
+  position: absolute;
+  font-size: 1.2rem;
+  opacity: 0;
+  animation: sparkle-float 2s ease-in-out infinite;
+}
+
+.sparkle:nth-child(1) { top: 10%; left: 10%; animation-delay: 0s; }
+.sparkle:nth-child(2) { top: 15%; right: 12%; animation-delay: 0.4s; }
+.sparkle:nth-child(3) { top: 55%; left: 5%; animation-delay: 0.7s; }
+.sparkle:nth-child(4) { top: 60%; right: 8%; animation-delay: 1.1s; }
+.sparkle:nth-child(5) { top: 35%; left: 2%; animation-delay: 1.5s; }
+.sparkle:nth-child(6) { top: 30%; right: 5%; animation-delay: 0.9s; }
+
+@keyframes sparkle-float {
+  0%   { opacity: 0; transform: translateY(0px) scale(0.5) rotate(0deg); }
+  30%  { opacity: 1; }
+  70%  { opacity: 0.8; }
+  100% { opacity: 0; transform: translateY(-40px) scale(1.2) rotate(30deg); }
+}
+
+/* Partículas de pensamento */
+.think-dots {
+  position: absolute;
+  top: 8%;
+  right: 15%;
+  display: flex;
+  gap: 5px;
+  pointer-events: none;
+}
+
+.think-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(234, 179, 8, 0.9);
+  animation: think-dot-bounce 1.2s ease-in-out infinite;
+}
+.think-dot:nth-child(1) { animation-delay: 0s; width: 6px; height: 6px; }
+.think-dot:nth-child(2) { animation-delay: 0.2s; }
+.think-dot:nth-child(3) { animation-delay: 0.4s; width: 11px; height: 11px; }
+
+@keyframes think-dot-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.5; }
+  50%      { transform: translateY(-10px); opacity: 1; }
+}
+
+/* Anel de escuta pulsante */
+.listen-ring {
+  position: absolute;
+  inset: -20px;
+  border-radius: 50%;
+  border: 2px solid rgba(6, 182, 212, 0.6);
+  animation: listen-ring-pulse 1.2s ease-out infinite;
+  pointer-events: none;
+}
+
+.listen-ring:nth-child(2) {
+  inset: -35px;
+  animation-delay: 0.4s;
+  border-color: rgba(6, 182, 212, 0.3);
+}
+
+@keyframes listen-ring-pulse {
+  0%   { transform: scale(0.9); opacity: 1; }
+  100% { transform: scale(1.15); opacity: 0; }
+}
+
+/* Ondas sonoras de voz ao fundo */
+.sound-waves {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  margin-top: 1.25rem;
+}
+
+.sound-bar {
+  width: 4px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  transition: all 0.3s;
+}
+
+.speaking .sound-bar {
+  background: var(--branco);
+  animation: sound-wave-play 0.6s infinite alternate;
+}
+
+.speaking .sound-bar:nth-child(1) { animation-delay: 0.1s; }
+.speaking .sound-bar:nth-child(2) { animation-delay: 0.3s; }
+.speaking .sound-bar:nth-child(3) { animation-delay: 0.2s; }
+.speaking .sound-bar:nth-child(4) { animation-delay: 0.4s; }
+.speaking .sound-bar:nth-child(5) { animation-delay: 0.15s; }
+
+@keyframes sound-wave-play {
+  from { height: 8px; }
+  to   { height: 30px; }
+}
+
+/* Chat no painel inferior/direito */
+.chat-panel {
+  background: var(--creme);
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #e8e0d5;
+  flex: 1;
+  overflow: hidden;
+}
+
+@media(min-width: 768px) {
+  .chat-panel {
+    border-top: none;
+    border-left: 1px solid #e8e0d5;
+    height: 100%;
+  }
+}

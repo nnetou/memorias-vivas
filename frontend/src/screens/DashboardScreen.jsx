@@ -282,6 +282,213 @@ function EcraTemas({ utilizador, onEscolher }) {
   );
 }
 
+// ── Componente Mascote Raquel (SVG Animado) ─────────────────────────────────
+
+function MascoteRaquel({ estado }) {
+  return (
+    <svg viewBox="0 0 200 200" className={`mascote-svg ${estado}`} fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* 1. Definições de Gradientes para aspeto premium e jovem */}
+      <defs>
+        <radialGradient id="pele-grad" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stopColor="#FFF2E6" />
+          <stop offset="100%" stopColor="#FFE3D1" />
+        </radialGradient>
+        <linearGradient id="cabelo-jovem-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#8D5B4C" />
+          <stop offset="60%" stopColor="#6C4336" />
+          <stop offset="100%" stopColor="#4A2D23" />
+        </linearGradient>
+        <linearGradient id="sweater-jovem-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#C4B5FD" />
+          <stop offset="100%" stopColor="#8B5CF6" />
+        </linearGradient>
+      </defs>
+
+      {/* 2. Cabelo de Fundo Volumoso (Cúpula da cabeça e laterais) */}
+      <path d="M35 80C35 25 165 25 165 80C165 130 150 160 150 160C150 160 138 135 138 120C120 120 115 100 100 100C85 100 80 120 62 120C62 135 50 160 50 160C50 160 35 130 35 80Z" fill="url(#cabelo-jovem-grad)" />
+
+      {/* 3. Corpo / Ombros com Camisola/Sweater Lilás (Jovem e Moderna) */}
+      <path d="M28 200C28 145 62 120 100 120C138 120 172 145 172 200Z" fill="url(#sweater-jovem-grad)" />
+      
+      {/* Gola Redonda Branca / Camisa por baixo */}
+      <path d="M82 120C82 135 118 135 118 120Z" fill="#FFFFFF" />
+      {/* Decote elegante em V da Camisola */}
+      <path d="M78 120L100 142L122 120" stroke="#7C3AED" strokeWidth="2.5" fill="none" />
+      
+      {/* Colar jovem delicado com brilhante de prata */}
+      <path d="M88 123C92 129 108 129 112 123" stroke="#D1D5DB" strokeWidth="1" fill="none" />
+      <circle cx="100" cy="129" r="2.5" fill="#E5E7EB" stroke="#9CA3AF" strokeWidth="0.5" />
+      
+      {/* Pescoço jovem */}
+      <path d="M85 108V122C85 125 115 125 115 122V108Z" fill="#FFE3D1" />
+
+      {/* CABELO POR CIMA DO CORPO (Madeixas compridas que caem sobre o peito/sweater) */}
+      <path d="M52 110C38 130 32 155 42 190C46 198 58 198 62 190C68 170 66 145 60 120Z" fill="url(#cabelo-jovem-grad)" />
+      <path d="M148 110C162 130 168 155 158 190C154 198 142 198 138 190C132 170 134 145 140 120Z" fill="url(#cabelo-jovem-grad)" />
+
+      {/* 4. Rosto de Rapariga Jovem (Cortado no topo para nunca aparecer pele no topo da cabeça!) */}
+      <path d="M59 82C59 55 141 55 141 82C141 108 128 123 100 123C72 123 59 108 59 82Z" fill="url(#pele-grad)" />
+      
+      {/* Bochechas Rosadas com Blush fresco de juventude */}
+      <circle cx="69" cy="95" r="7.5" fill="#FFA6C9" opacity="0.6" />
+      <circle cx="131" cy="95" r="7.5" fill="#FFA6C9" opacity="0.6" />
+
+      {/* 5. Cabelo da frente (Franja moderna grossa que cobre totalmente a testa) */}
+      <path d="M58 82C58 40 142 40 142 82C142 82 128 65 100 68C72 65 58 82 58 82Z" fill="url(#cabelo-jovem-grad)" />
+      
+      {/* Fita de cabelo/bandolete amarela moderna */}
+      <path d="M60 56C70 44 130 44 140 56" stroke="#FBBF24" strokeWidth="4.5" strokeLinecap="round" fill="none" />
+
+      {/* 6. Óculos de Armação Fina de Ouro (Super Jovem, Intelectual e Chic) */}
+      <circle cx="78" cy="82" r="12" stroke="#D4AF37" strokeWidth="2" fill="none" />
+      <circle cx="122" cy="82" r="12" stroke="#D4AF37" strokeWidth="2" fill="none" />
+      <line x1="90" y1="82" x2="110" y2="82" stroke="#D4AF37" strokeWidth="2" strokeLinecap="round" />
+
+      {/* 7. Expressões Faciais Dinâmicas com base no Estado */}
+      
+      {estado === "speaking" && (
+        <>
+          {/* Sobrancelhas jovens e ativas */}
+          <path d="M67 63Q78 57 89 62" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <path d="M111 62Q122 57 133 63" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          {/* Olhos brilhantes com pestanas expressivas */}
+          <g className="mascote-olho">
+            <path d="M68 80L63 76" stroke="#2d3748" strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M132 80L137 76" stroke="#2d3748" strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="78" cy="82" r="4.5" fill="#2d3748" />
+            <circle cx="76" cy="80" r="1.5" fill="white" />
+            <circle cx="122" cy="82" r="4.5" fill="#2d3748" />
+            <circle cx="120" cy="80" r="1.5" fill="white" />
+          </g>
+          {/* Boca expressiva em movimento de fala */}
+          <ellipse cx="100" cy="107" rx="6" ry="8.5" fill="#881337" className="mascote-boca-falante" />
+        </>
+      )}
+
+      {estado === "speaking-happy" && (
+        <>
+          {/* Sobrancelhas muito felizes e levantadas */}
+          <path d="M66 60Q78 51 90 60" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <path d="M110 60Q122 51 134 60" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          {/* Olhos ultra felizes e cintilantes com pestanas */}
+          <g className="mascote-olho">
+            <path d="M68 80L63 76" stroke="#2d3748" strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M132 80L137 76" stroke="#2d3748" strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="78" cy="82" r="5" fill="#2d3748" />
+            <circle cx="76" cy="79" r="2" fill="white" />
+            <circle cx="122" cy="82" r="5" fill="#2d3748" />
+            <circle cx="120" cy="79" r="2" fill="white" />
+          </g>
+          {/* Boca sorridente e aberta a falar com entusiasmo */}
+          <ellipse cx="100" cy="107" rx="8" ry="9.5" fill="#881337" className="mascote-boca-falante" />
+        </>
+      )}
+
+      {estado === "speaking-sad" && (
+        <>
+          {/* Sobrancelhas inclinadas em compaixão ("sinto muito") */}
+          <path d="M68 64Q78 70 88 64" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <path d="M112 64Q122 70 132 64" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          {/* Olhos empáticos doces */}
+          <g className="mascote-olho">
+            <circle cx="78" cy="83" r="4.2" fill="#2d3748" />
+            <circle cx="76" cy="81" r="1.3" fill="white" />
+            <circle cx="122" cy="83" r="4.2" fill="#2d3748" />
+            <circle cx="120" cy="81" r="1.3" fill="white" />
+          </g>
+          {/* Boca a falar de forma contida e empática */}
+          <ellipse cx="100" cy="109" rx="5" ry="7" fill="#581c2f" className="mascote-boca-falante-triste" />
+        </>
+      )}
+
+      {estado === "listening" && (
+        <>
+          {/* Sobrancelhas doces */}
+          <path d="M67 65Q78 66 89 63" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <path d="M111 63Q122 66 133 65" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          {/* Olhos fechados num lindo sorriso de escuta atenta */}
+          <path d="M72 82Q78 88 84 82" stroke="#2D3748" strokeWidth="3" strokeLinecap="round" fill="none" />
+          <path d="M116 82Q122 88 128 82" stroke="#2D3748" strokeWidth="3" strokeLinecap="round" fill="none" />
+          {/* Sorriso fechado e feliz */}
+          <path d="M93 104Q100 108 107 104" stroke="#881337" strokeWidth="3" strokeLinecap="round" fill="none" />
+        </>
+      )}
+
+      {estado === "thinking" && (
+        <>
+          {/* Sobrancelhas curiosas (uma arqueada) */}
+          <path d="M66 59Q78 54 89 61" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <path d="M110 65Q122 68 133 64" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          {/* Olhos expressivos a olhar de soslaio para cima */}
+          <g>
+            <circle cx="80" cy="79" r="4.5" fill="#2d3748" />
+            <circle cx="78" cy="77" r="1.5" fill="white" />
+            <circle cx="124" cy="79" r="4.5" fill="#2d3748" />
+            <circle cx="122" cy="77" r="1.5" fill="white" />
+          </g>
+          {/* Boca em pequeno circulo pensativo */}
+          <circle cx="100" cy="106" r="4" fill="#881337" />
+        </>
+      )}
+
+      {estado === "idle" && (
+        <>
+          {/* Sobrancelhas tranquilas */}
+          <path d="M67 63Q78 59 89 63" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <path d="M111 63Q122 59 133 63" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          {/* Olhos brilhantes normais */}
+          <g className="mascote-olho">
+            <path d="M68 80L63 76" stroke="#2d3748" strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M132 80L137 76" stroke="#2d3748" strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="78" cy="82" r="4.5" fill="#2d3748" />
+            <circle cx="76" cy="80" r="1.5" fill="white" />
+            <circle cx="122" cy="82" r="4.5" fill="#2d3748" />
+            <circle cx="120" cy="80" r="1.5" fill="white" />
+          </g>
+          {/* Sorriso caloroso de rapariga simpática */}
+          <path d="M89 102Q100 114 111 102Z" fill="#881337" />
+        </>
+      )}
+
+      {estado === "idle-happy" && (
+        <>
+          {/* Sobrancelhas muito felizes */}
+          <path d="M66 61Q78 54 90 61" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <path d="M110 61Q122 54 134 61" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          {/* Olhos super sorridentes e felizes */}
+          <g className="mascote-olho">
+            <path d="M68 80L63 76" stroke="#2d3748" strokeWidth="1.5" strokeLinecap="round" />
+            <path d="M132 80L137 76" stroke="#2d3748" strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="78" cy="82" r="4.5" fill="#2d3748" />
+            <circle cx="76" cy="80" r="1.8" fill="white" />
+            <circle cx="122" cy="82" r="4.5" fill="#2d3748" />
+            <circle cx="120" cy="80" r="1.8" fill="white" />
+          </g>
+          {/* Lindo e radiante sorriso aberto de alegria ("Uau!", "Excelente!") */}
+          <path d="M87 101Q100 117 113 101Z" fill="#881337" />
+        </>
+      )}
+
+      {estado === "idle-sad" && (
+        <>
+          {/* Sobrancelhas doces inclinadas em empatia */}
+          <path d="M68 64Q78 69 88 64" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          <path d="M112 64Q122 69 132 64" stroke="#4A2D23" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+          {/* Olhos compreensivos e gentis */}
+          <g className="mascote-olho">
+            <circle cx="78" cy="83" r="4.2" fill="#2d3748" />
+            <circle cx="76" cy="81" r="1.3" fill="white" />
+            <circle cx="122" cy="83" r="4.2" fill="#2d3748" />
+            <circle cx="120" cy="81" r="1.3" fill="white" />
+          </g>
+          {/* Sorriso pequeno de compaixão e carinho ("Sinto muito...") */}
+          <path d="M92 106Q100 110 108 106" stroke="#881337" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 // ── Ecrã de conversa ───────────────────────────────────────────────────────
 
 function EcraConversa({ tema, onVoltar, onEncerrada }) {
@@ -290,6 +497,7 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
   const [micEstado, setMicEstado] = useState("idle");
   const [erro, setErro]           = useState("");
   const [isEncerrando, setIsEncerrando] = useState(false);
+  const [isSpeaking, setIsSpeaking]     = useState(false);
 
   const wsRef          = useRef(null);
   const mediaRecRef    = useRef(null);
@@ -307,11 +515,29 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
     anchorRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [mensagens]);
 
-  // Ligar WebSocket e instanciar Audio player
+  // Escutar eventos de áudio para mudar o estado de fala
   useEffect(() => {
     if (!audioPlayerRef.current) {
       audioPlayerRef.current = new Audio();
     }
+    const audio = audioPlayerRef.current;
+    const handlePlay = () => setIsSpeaking(true);
+    const handleEnd = () => setIsSpeaking(false);
+    const handlePause = () => setIsSpeaking(false);
+
+    audio.addEventListener("play", handlePlay);
+    audio.addEventListener("ended", handleEnd);
+    audio.addEventListener("pause", handlePause);
+
+    return () => {
+      audio.removeEventListener("play", handlePlay);
+      audio.removeEventListener("ended", handleEnd);
+      audio.removeEventListener("pause", handlePause);
+    };
+  }, []);
+
+  // Ligar WebSocket
+  useEffect(() => {
     const ws = new WebSocket(WS_URL);
     ws.binaryType = "arraybuffer";
     wsRef.current = ws;
@@ -424,12 +650,47 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
   };
   const mc = micConfig[micEstado] || micConfig.idle;
 
+  let companionState = "idle";
+  
+  // Obter o texto da última resposta da assistente para detetar a emoção
+  const ultimaMsgAssistente = [...mensagens].reverse().find(m => m.role === "assistant")?.texto || "";
+  const textoLower = ultimaMsgAssistente.toLowerCase();
+  
+  const palavrasFelizes = ["ótimo", "otimo", "maravilha", "uau", "excelente", "que bom", "fantástico", "fantastico", "espetacular", "lindo", "alegria", "parabéns", "parabens", "adoro", "gosto muito", "divertido", "sorriso", "feliz", "celebrar", "linda"];
+  const palavrasTristes = ["sinto muito", "que pena", "lamento", "triste", "lamentável", "lamentavel", "pena", "coitado", "dor", "saudade", "difícil", "dificil", "complicado", "doença", "doenca", "falecer", "partiu", "morreu"];
+  
+  const isTriste = palavrasTristes.some(p => textoLower.includes(p));
+  const isFeliz = palavrasFelizes.some(p => textoLower.includes(p));
+
+  if (isSpeaking) {
+    if (isTriste) {
+      companionState = "speaking-sad";
+    } else if (isFeliz) {
+      companionState = "speaking-happy";
+    } else {
+      companionState = "speaking";
+    }
+  } else if (micEstado === "gravando") {
+    companionState = "listening";
+  } else if (micEstado === "processando") {
+    companionState = "thinking";
+  } else {
+    // Idle com sentimento herdado da última interação
+    if (isTriste) {
+      companionState = "idle-sad";
+    } else if (isFeliz) {
+      companionState = "idle-happy";
+    } else {
+      companionState = "idle";
+    }
+  }
+
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--creme)", height: "100dvh" }}>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", background: "var(--creme)", height: "100dvh", overflow: "hidden" }}>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Lora:wght@400;500;600&display=swap" rel="stylesheet" />
 
       {/* Header */}
-      <header className="app-header" style={{ gap: "1rem" }}>
+      <header className="app-header" style={{ gap: "1rem", flexShrink: 0 }}>
         <button onClick={onVoltar}
           style={{ background: "none", border: "none", color: "var(--azul)", cursor: "pointer", padding: "0.5rem", display: "flex", marginLeft: "-0.5rem" }}
           aria-label="Voltar à seleção de tema">
@@ -467,7 +728,7 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
           {isEncerrando ? (
             <>
               <SpinnerIcon />
-              A guardar progresso...
+              A guardar...
             </>
           ) : (
             "Terminar"
@@ -475,56 +736,135 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
         </button>
       </header>
 
-      {/* Mensagens */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem 1rem 0.5rem" }}>
-        {mensagens.length === 0 && (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", textAlign: "center", paddingTop: "3rem" }}>
-            <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>{temaAtual?.emoji}</div>
-            <p style={{ color: "var(--cinza-claro)", fontSize: "var(--text-lg)" }}>
-              Prima o botão para começar a conversar.
-            </p>
+      {/* Visual da Mascote em Estilo Vídeochamada (Duolingo) */}
+      <div className="video-call-layout">
+        
+        {/* Painel da Raquel (Vídeo superior ou esquerdo) */}
+        <div className="companion-panel">
+          {/* Badge de Estado centralizado horizontalmente com o corpo */}
+          <div style={{
+            position: "absolute",
+            top: "1rem",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(0, 0, 0, 0.4)",
+            backdropFilter: "blur(8px)",
+            padding: "0.4rem 0.8rem",
+            borderRadius: "9999px",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            zIndex: 10
+          }}>
+            <span style={{
+              width: "8px",
+              height: "8px",
+              borderRadius: "50%",
+              background: companionState === "speaking" ? "#a855f7" : companionState === "listening" ? "#06b6d4" : companionState === "thinking" ? "#eab308" : "#10b981",
+              boxShadow: "0 0 8px currentColor",
+              display: "inline-block"
+            }} />
+            <span style={{ color: "white", fontSize: "0.8rem", fontFamily: "var(--font-serif)" }}>
+              {companionState === "speaking" ? "A falar..." : companionState === "listening" ? "A ouvi-lo..." : companionState === "thinking" ? "A pensar..." : "Raquel (Assistente)"}
+            </span>
           </div>
-        )}
-        {mensagens.map((m, i) => <Bolha key={i} role={m.role} texto={m.texto} streaming={m.streaming} />)}
-        <div ref={anchorRef} />
-      </div>
 
-      {/* Erro */}
-      {erro && (
-        <div style={{
-          margin: "0 1rem 0.5rem",
-          padding: "0.875rem 1.25rem",
-          background: "#fef2f2",
-          border: "1px solid #fca5a5",
-          borderRadius: "var(--radius-sm)",
-          color: "#b91c1c",
-          fontSize: "var(--text-base)",
-        }} role="alert">
-          {erro}
+          <div className={`avatar-halo ${companionState}`}>
+            <MascoteRaquel estado={companionState} />
+            {/* Sparkles quando feliz a falar */}
+            {(companionState === "speaking-happy" || companionState === "idle-happy") && (
+              <div className="mascote-sparkles">
+                <span className="sparkle">✨</span>
+                <span className="sparkle">⭐</span>
+                <span className="sparkle">✨</span>
+                <span className="sparkle">⭐</span>
+                <span className="sparkle">✨</span>
+                <span className="sparkle">⭐</span>
+              </div>
+            )}
+            {/* Dots de pensamento */}
+            {companionState === "thinking" && (
+              <div className="think-dots">
+                <div className="think-dot" />
+                <div className="think-dot" />
+                <div className="think-dot" />
+              </div>
+            )}
+            {/* Rings de escuta pulsantes */}
+            {companionState === "listening" && (
+              <>
+                <div className="listen-ring" />
+                <div className="listen-ring" />
+              </>
+            )}
+          </div>
+
+          {/* Ondas sonoras animadas */}
+          <div className={`sound-waves ${companionState === "speaking" ? "speaking" : ""}`}>
+            <div className="sound-bar" />
+            <div className="sound-bar" />
+            <div className="sound-bar" />
+            <div className="sound-bar" />
+            <div className="sound-bar" />
+          </div>
         </div>
-      )}
 
-      {/* Controlo microfone */}
-      <div style={{
-        background: "white",
-        borderTop: "1px solid #e8e0d5",
-        padding: "1.5rem 1rem calc(1.5rem + var(--safe-bottom))",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "0.875rem",
-        marginBottom: "72px", /* espaço para bottom nav */
-      }}>
-        <button
-          id="btn-microfone"
-          className={`mic-btn ${mc.classe}`}
-          onClick={handleMic}
-          disabled={micEstado === "processando"}
-          aria-label={mc.label}
-        >
-          {mc.icone}
-        </button>
-        <p className="mic-label">{mc.label}</p>
+        {/* Painel do Chat e Transcrição */}
+        <div className="chat-panel">
+          <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem 1rem 0.5rem" }}>
+            {mensagens.length === 0 && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", textAlign: "center", padding: "2rem" }}>
+                <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>{temaAtual?.emoji}</div>
+                <p style={{ color: "var(--texto-suave)", fontSize: "var(--text-lg)", fontFamily: "var(--font-serif)", lineHeight: "1.6" }}>
+                  Olá, sou a Raquel! Carregue no microfone abaixo e vamos conversar sobre as suas memórias mais bonitas. Estou pronta a ouvi-lo!
+                </p>
+              </div>
+            )}
+            {mensagens.map((m, i) => <Bolha key={i} role={m.role} texto={m.texto} streaming={m.streaming} />)}
+            <div ref={anchorRef} />
+          </div>
+
+          {/* Erro */}
+          {erro && (
+            <div style={{
+              margin: "0 1rem 0.5rem",
+              padding: "0.875rem 1.25rem",
+              background: "#fef2f2",
+              border: "1px solid #fca5a5",
+              borderRadius: "var(--radius-sm)",
+              color: "#b91c1c",
+              fontSize: "var(--text-base)",
+            }} role="alert">
+              {erro}
+            </div>
+          )}
+
+          {/* Controlo microfone */}
+          <div style={{
+            background: "white",
+            borderTop: "1px solid #e8e0d5",
+            padding: "1.25rem 1rem calc(1.25rem + var(--safe-bottom))",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "0.75rem",
+            flexShrink: 0
+          }}>
+            <button
+              id="btn-microfone"
+              className={`mic-btn ${mc.classe}`}
+              onClick={handleMic}
+              disabled={micEstado === "processando"}
+              aria-label={mc.label}
+              style={{ width: "90px", height: "90px" }}
+            >
+              {mc.icone}
+            </button>
+            <p className="mic-label" style={{ margin: 0, fontSize: "var(--text-sm)" }}>{mc.label}</p>
+          </div>
+        </div>
+
       </div>
     </div>
   );
@@ -576,10 +916,17 @@ function EcraEncerrada({ onNova }) {
 
 // ── Componente principal ───────────────────────────────────────────────────
 
-export default function DashboardScreen({ iniciarConversa = false }) {
+export default function DashboardScreen({ iniciarConversa = false, onConversaAtivaChange }) {
   const { utilizador } = useAuth();
   const [tema, setTema]       = useState(null);
   const [encerrada, setEncerrada] = useState(false);
+
+  // Reportar se a conversa está ativa para o App.jsx poder ocultar o BottomNav
+  useEffect(() => {
+    if (onConversaAtivaChange) {
+      onConversaAtivaChange(!!tema && !encerrada);
+    }
+  }, [tema, encerrada, onConversaAtivaChange]);
 
   const handleEscolherTema = (id) => {
     setTema(id);
