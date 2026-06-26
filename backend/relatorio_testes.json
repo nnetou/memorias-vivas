@@ -1,0 +1,987 @@
+{
+  "data": "2026-06-19T13:30:10.496109+00:00",
+  "total_testes": 41,
+  "passaram": 40,
+  "falharam": 1,
+  "testes": [
+    {
+      "id": "T-IMP-01",
+      "categoria": "implementacao",
+      "subcategoria": "sistema",
+      "nome": "Health Check — API operacional",
+      "passou": true,
+      "detalhes": "Status: ok | Versão: 1.0.0 | Chaves: {\"groq\": true, \"google\": true, \"database\": true, \"redis\": true}",
+      "latencia_ms": 4.7,
+      "metricas": {
+        "chaves": {
+          "groq": true,
+          "google": true,
+          "database": true,
+          "redis": true
+        }
+      }
+    },
+    {
+      "id": "T-IMP-02",
+      "categoria": "implementacao",
+      "subcategoria": "database",
+      "nome": "Conectividade PostgreSQL + tabelas",
+      "passou": true,
+      "detalhes": "PostgreSQL: PostgreSQL 15.18 on aarch64-un... | Tabelas: ['alembic_version', 'artefactos', 'consentimentos', 'perfis_biograficos', 'sessoes', 'tokens_reset_password', 'utilizadores']",
+      "latencia_ms": 175.4,
+      "metricas": {
+        "pg_version": "PostgreSQL 15.18 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+        "tabelas": [
+          "alembic_version",
+          "artefactos",
+          "consentimentos",
+          "perfis_biograficos",
+          "sessoes",
+          "tokens_reset_password",
+          "utilizadores"
+        ],
+        "n_tabelas": 7
+      }
+    },
+    {
+      "id": "T-IMP-03",
+      "categoria": "implementacao",
+      "subcategoria": "cache",
+      "nome": "Conectividade Redis + PING",
+      "passou": true,
+      "detalhes": "Redis 7.4.9 | PING=True",
+      "latencia_ms": 0.4,
+      "metricas": {
+        "redis_version": "7.4.9"
+      }
+    },
+    {
+      "id": "T-IMP-04",
+      "categoria": "implementacao",
+      "subcategoria": "ia",
+      "nome": "API Groq (Llama 3.3 70B) — chave válida",
+      "passou": true,
+      "detalhes": "Resposta: 'OK' | Modelo: llama-3.3-70b-versatile",
+      "latencia_ms": 247.9,
+      "metricas": {
+        "modelo": "llama-3.3-70b-versatile",
+        "tokens_prompt": 40,
+        "tokens_resposta": 2
+      }
+    },
+    {
+      "id": "T-IMP-05",
+      "categoria": "implementacao",
+      "subcategoria": "ia",
+      "nome": "API Gemini 2.5 Flash — chave válida + JSON mode",
+      "passou": false,
+      "detalhes": "Resposta: ",
+      "latencia_ms": 1174.4,
+      "metricas": {
+        "resposta_json": ""
+      }
+    },
+    {
+      "id": "T-IMP-06",
+      "categoria": "implementacao",
+      "subcategoria": "voz",
+      "nome": "Edge-TTS (voz pt-PT-RaquelNeural) — funcional",
+      "passou": true,
+      "detalhes": "Áudio gerado: 14.1 KB | Formato: MP3",
+      "latencia_ms": 474.3,
+      "metricas": {
+        "tamanho_bytes": 14400,
+        "tamanho_kb": 14.1
+      }
+    },
+    {
+      "id": "T-IMP-07",
+      "categoria": "implementacao",
+      "subcategoria": "database",
+      "nome": "Dados de seed — utilizadores, perfis, sessões",
+      "passou": true,
+      "detalhes": "Utilizadores: 3 | Perfis: 2 | Sessões: 4",
+      "latencia_ms": 23.0,
+      "metricas": {
+        "utilizadores": 3,
+        "perfis": 2,
+        "sessoes": 4
+      }
+    },
+    {
+      "id": "TF-AUTH-01",
+      "categoria": "funcional",
+      "subcategoria": "auth",
+      "nome": "Login com credenciais válidas — JWT emitido",
+      "passou": true,
+      "detalhes": "HTTP 200 | user_id=04e297f5... | role=idoso",
+      "latencia_ms": 260.7,
+      "metricas": {
+        "status": 200,
+        "role": "idoso"
+      }
+    },
+    {
+      "id": "TF-AUTH-02",
+      "categoria": "funcional",
+      "subcategoria": "auth",
+      "nome": "Login com password errada — rejeição 401",
+      "passou": true,
+      "detalhes": "HTTP 401 (esperado 401)",
+      "latencia_ms": 254.7,
+      "metricas": {}
+    },
+    {
+      "id": "TF-AUTH-03",
+      "categoria": "funcional",
+      "subcategoria": "auth",
+      "nome": "GET /me — dados do utilizador autenticado",
+      "passou": true,
+      "detalhes": "Email: manuel@memoriasvivas.pt | Nome: Manuel Silva | Onboarding: True",
+      "latencia_ms": 43.6,
+      "metricas": {}
+    },
+    {
+      "id": "TF-AUTH-04",
+      "categoria": "funcional",
+      "subcategoria": "auth",
+      "nome": "GET /me sem token — rejeição 401",
+      "passou": true,
+      "detalhes": "HTTP 401 (esperado 401/403)",
+      "latencia_ms": 42.0,
+      "metricas": {}
+    },
+    {
+      "id": "TF-AUTH-05",
+      "categoria": "funcional",
+      "subcategoria": "auth",
+      "nome": "Refresh token — novo par de tokens emitido",
+      "passou": true,
+      "detalhes": "HTTP 200 | Novo token emitido: sim",
+      "latencia_ms": 43.9,
+      "metricas": {}
+    },
+    {
+      "id": "TF-AUTH-06",
+      "categoria": "funcional",
+      "subcategoria": "auth",
+      "nome": "GET /perfil — perfil biográfico do utilizador",
+      "passou": true,
+      "detalhes": "Perfil presente: True | Campos: 8 | Temas: ['memorias', 'familia']",
+      "latencia_ms": 46.9,
+      "metricas": {
+        "campos_perfil": [
+          "nome",
+          "outros",
+          "familia",
+          "memorias",
+          "profissao",
+          "terra_natal",
+          "linha_temporal",
+          "memoria_marcante"
+        ],
+        "n_campos": 8
+      }
+    },
+    {
+      "id": "TF-CHAT-01",
+      "categoria": "funcional",
+      "subcategoria": "chat",
+      "nome": "Conversa personalizada — resposta com perfil biográfico",
+      "passou": true,
+      "detalhes": "Resposta (36 chars): 'Bom dia, Manuel! Como se sente hoje?...' | TTFT: 273.1ms | Tema: memorias",
+      "latencia_ms": 328.9,
+      "metricas": {
+        "ttft_ms": 273.1,
+        "chars_resposta": 36,
+        "session_id": "8da2f118-817c-49e4-84d9-6f08ec5bf345"
+      }
+    },
+    {
+      "id": "TF-CHAT-02",
+      "categoria": "funcional",
+      "subcategoria": "chat",
+      "nome": "Continuidade de sessão — 2ª mensagem com contexto Redis",
+      "passou": true,
+      "detalhes": "Resposta: 'Que belas memórias! Lembra-se de algum dia em particular em Évora que nunca esqu...' | Session mantida: True",
+      "latencia_ms": 369.2,
+      "metricas": {}
+    },
+    {
+      "id": "TF-CHAT-03-memorias",
+      "categoria": "funcional",
+      "subcategoria": "chat",
+      "nome": "Tema 'memorias' — resposta válida",
+      "passou": true,
+      "detalhes": "HTTP 200 | Resposta: 72 chars | TTFT: 358.8ms",
+      "latencia_ms": 405.3,
+      "metricas": {
+        "ttft_ms": 358.8
+      }
+    },
+    {
+      "id": "TF-CHAT-03-familia",
+      "categoria": "funcional",
+      "subcategoria": "chat",
+      "nome": "Tema 'familia' — resposta válida",
+      "passou": true,
+      "detalhes": "HTTP 200 | Resposta: 68 chars | TTFT: 413.6ms",
+      "latencia_ms": 418.4,
+      "metricas": {
+        "ttft_ms": 413.6
+      }
+    },
+    {
+      "id": "TF-CHAT-03-saude",
+      "categoria": "funcional",
+      "subcategoria": "chat",
+      "nome": "Tema 'saude' — resposta válida",
+      "passou": true,
+      "detalhes": "HTTP 200 | Resposta: 31 chars | TTFT: 371.5ms",
+      "latencia_ms": 376.4,
+      "metricas": {
+        "ttft_ms": 371.5
+      }
+    },
+    {
+      "id": "TF-CHAT-03-entretenimento",
+      "categoria": "funcional",
+      "subcategoria": "chat",
+      "nome": "Tema 'entretenimento' — resposta válida",
+      "passou": true,
+      "detalhes": "HTTP 200 | Resposta: 58 chars | TTFT: 225.4ms",
+      "latencia_ms": 229.5,
+      "metricas": {
+        "ttft_ms": 225.4
+      }
+    },
+    {
+      "id": "TF-CHAT-03-exercicio",
+      "categoria": "funcional",
+      "subcategoria": "chat",
+      "nome": "Tema 'exercicio' — resposta válida",
+      "passou": true,
+      "detalhes": "HTTP 200 | Resposta: 31 chars | TTFT: 342.5ms",
+      "latencia_ms": 348.3,
+      "metricas": {
+        "ttft_ms": 342.5
+      }
+    },
+    {
+      "id": "TF-CHAT-03-geral",
+      "categoria": "funcional",
+      "subcategoria": "chat",
+      "nome": "Tema 'geral' — resposta válida",
+      "passou": true,
+      "detalhes": "HTTP 200 | Resposta: 31 chars | TTFT: 202.1ms",
+      "latencia_ms": 207.3,
+      "metricas": {
+        "ttft_ms": 202.1
+      }
+    },
+    {
+      "id": "TF-MEM-01",
+      "categoria": "funcional",
+      "subcategoria": "memoria_curta",
+      "nome": "Redis — escrita + leitura + eliminação de histórico",
+      "passou": true,
+      "detalhes": "Escrito: 2 msgs | Lido: 2 msgs | Conteúdo correto: True",
+      "latencia_ms": 1.0,
+      "metricas": {}
+    },
+    {
+      "id": "TF-MEM-02",
+      "categoria": "funcional",
+      "subcategoria": "memoria_curta",
+      "nome": "Redis — append_interacao (acumula pares user/assistant)",
+      "passou": true,
+      "detalhes": "2 appends → 4 mensagens (esperado: 4)",
+      "latencia_ms": 0.9,
+      "metricas": {}
+    },
+    {
+      "id": "TF-MEM-L-01",
+      "categoria": "funcional",
+      "subcategoria": "memoria_longa",
+      "nome": "Gemini — extração de perfil biográfico (JSON estruturado)",
+      "passou": true,
+      "detalhes": "Nome: Joaquim Ferreira | Campos preenchidos: ['nome', 'terra_natal', 'profissao', 'locais', 'linha_temporal', 'resumo_narrativo']",
+      "latencia_ms": 9322.1,
+      "metricas": {
+        "campos_preenchidos": [
+          "nome",
+          "terra_natal",
+          "profissao",
+          "locais",
+          "linha_temporal",
+          "resumo_narrativo"
+        ],
+        "n_campos": 6
+      }
+    },
+    {
+      "id": "TF-MEM-L-02",
+      "categoria": "funcional",
+      "subcategoria": "memoria_longa",
+      "nome": "LangGraph + Gemini/Groq — merge de perfis sem perda de dados",
+      "passou": true,
+      "detalhes": "Nome preservado: True | Família adicionada: True | Campos: ['nome', 'terra_natal', 'familia', 'profissao', 'memoria_marcante', 'pessoas', 'locais', 'datas_aproximadas', 'eventos_marcantes', 'tradicoes', 'expressoes_regionais', 'momentos_chave', 'linha_temporal', 'memorias', 'resumo_narrativo', 'outros']",
+      "latencia_ms": 5007.7,
+      "metricas": {}
+    },
+    {
+      "id": "TF-MEM-L-03",
+      "categoria": "funcional",
+      "subcategoria": "memoria_longa",
+      "nome": "Gemini — geração de resumo narrativo biográfico",
+      "passou": true,
+      "detalhes": "Resumo (667 chars): 'Aos doze anos de idade, o indivíduo vivenciou um momento marcante na sua vida: a primeira vez que se...'",
+      "latencia_ms": 9050.5,
+      "metricas": {}
+    },
+    {
+      "id": "TF-ENC-01",
+      "categoria": "funcional",
+      "subcategoria": "encerramento",
+      "nome": "Encerrar sessão — extração + merge + persistência completa",
+      "passou": true,
+      "detalhes": "Perfil atualizado: True | Msg: Sessão encerrada e perfil atualizado. | Erro: None",
+      "latencia_ms": 18225.4,
+      "metricas": {}
+    },
+    {
+      "id": "TF-ART-01",
+      "categoria": "funcional",
+      "subcategoria": "artefactos",
+      "nome": "Gerar Timeline HTML — artefacto standalone",
+      "passou": true,
+      "detalhes": "Tipo: timeline_html | URL: /api/v1/artefactos/141b06fe-f08f-4b0d-b716-84034e001dfd/download | Gerado: 19/06/2026 13:29",
+      "latencia_ms": 47.6,
+      "metricas": {}
+    },
+    {
+      "id": "TF-ART-02",
+      "categoria": "funcional",
+      "subcategoria": "artefactos",
+      "nome": "Gerar Livro de Memórias PDF — capítulos narrativos Gemini",
+      "passou": true,
+      "detalhes": "Tipo: livro_pdf | Gerado em: 18.5s",
+      "latencia_ms": 18493.6,
+      "metricas": {}
+    },
+    {
+      "id": "TF-ART-03",
+      "categoria": "funcional",
+      "subcategoria": "artefactos",
+      "nome": "Gerar Cartões de Histórias PDF — story cards",
+      "passou": true,
+      "detalhes": "Tipo: cartoes_pdf | Gerado em: 2.0s",
+      "latencia_ms": 2011.3,
+      "metricas": {}
+    },
+    {
+      "id": "TF-ART-04",
+      "categoria": "funcional",
+      "subcategoria": "artefactos",
+      "nome": "Listar artefactos do utilizador",
+      "passou": true,
+      "detalhes": "Artefactos encontrados: 18",
+      "latencia_ms": 48.0,
+      "metricas": {
+        "n_artefactos": 18
+      }
+    },
+    {
+      "id": "TD-01",
+      "categoria": "desempenho",
+      "subcategoria": "latencia",
+      "nome": "Health Check — 5 iterações",
+      "passou": true,
+      "detalhes": "P50=42.9ms | P95=43.8ms | Max=43.8ms | Min=42.3ms",
+      "latencia_ms": null,
+      "metricas": {
+        "nome": "Health Check",
+        "p50_ms": 42.9,
+        "p95_ms": 43.8,
+        "media_ms": 43.0,
+        "max_ms": 43.8,
+        "min_ms": 42.3,
+        "n_amostras": 5,
+        "valores": [
+          43.8,
+          42.9,
+          42.7,
+          42.3,
+          43.3
+        ]
+      }
+    },
+    {
+      "id": "TD-02",
+      "categoria": "desempenho",
+      "subcategoria": "latencia",
+      "nome": "Login (bcrypt hash) — 5 iterações",
+      "passou": true,
+      "detalhes": "P50=245.2ms | P95=271.4ms | Max=271.4ms",
+      "latencia_ms": null,
+      "metricas": {
+        "nome": "Login (bcrypt)",
+        "p50_ms": 245.2,
+        "p95_ms": 271.4,
+        "media_ms": 252.8,
+        "max_ms": 271.4,
+        "min_ms": 234.4,
+        "n_amostras": 5,
+        "valores": [
+          271.4,
+          245.2,
+          242.8,
+          270.0,
+          234.4
+        ]
+      }
+    },
+    {
+      "id": "TD-03",
+      "categoria": "desempenho",
+      "subcategoria": "latencia",
+      "nome": "GET /me (decode JWT + DB) — 5 iterações",
+      "passou": true,
+      "detalhes": "P50=43.1ms | P95=44.6ms | Max=44.6ms",
+      "latencia_ms": null,
+      "metricas": {
+        "nome": "GET /me",
+        "p50_ms": 43.1,
+        "p95_ms": 44.6,
+        "media_ms": 43.5,
+        "max_ms": 44.6,
+        "min_ms": 42.6,
+        "n_amostras": 5,
+        "valores": [
+          42.6,
+          44.3,
+          44.6,
+          43.0,
+          43.1
+        ]
+      }
+    },
+    {
+      "id": "TD-04",
+      "categoria": "desempenho",
+      "subcategoria": "latencia",
+      "nome": "Chat personalizado Groq (Llama 3.3 70B) — 3 iterações",
+      "passou": true,
+      "detalhes": "Latência total: P50=333.0ms P95=532.3ms | TTFT médio Groq: 365.0ms",
+      "latencia_ms": null,
+      "metricas": {
+        "nome": "Chat Personalizado (Groq)",
+        "p50_ms": 333.0,
+        "p95_ms": 532.3,
+        "media_ms": 383.7,
+        "max_ms": 532.3,
+        "min_ms": 285.8,
+        "n_amostras": 3,
+        "valores": [
+          333.0,
+          532.3,
+          285.8
+        ],
+        "ttft_medio": 365.0
+      }
+    },
+    {
+      "id": "TD-05",
+      "categoria": "desempenho",
+      "subcategoria": "redis",
+      "nome": "Redis — SETEX/GET/DEL (10 msgs, 10 iterações)",
+      "passou": true,
+      "detalhes": "WRITE P50=0.1ms | READ P50=0.1ms | DEL P50=0.1ms",
+      "latencia_ms": null,
+      "metricas": {
+        "write": {
+          "nome": "Redis SETEX",
+          "p50_ms": 0.1,
+          "p95_ms": 0.8,
+          "media_ms": 0.2,
+          "max_ms": 0.8,
+          "min_ms": 0.1,
+          "n_amostras": 10,
+          "valores": [
+            0.8,
+            0.1,
+            0.2,
+            0.2,
+            0.2,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1
+          ]
+        },
+        "read": {
+          "nome": "Redis GET",
+          "p50_ms": 0.1,
+          "p95_ms": 0.2,
+          "media_ms": 0.1,
+          "max_ms": 0.2,
+          "min_ms": 0.1,
+          "n_amostras": 10,
+          "valores": [
+            0.2,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1
+          ]
+        },
+        "delete": {
+          "nome": "Redis DEL",
+          "p50_ms": 0.1,
+          "p95_ms": 0.2,
+          "media_ms": 0.1,
+          "max_ms": 0.2,
+          "min_ms": 0.1,
+          "n_amostras": 10,
+          "valores": [
+            0.2,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            0.1
+          ]
+        }
+      }
+    },
+    {
+      "id": "TD-06",
+      "categoria": "desempenho",
+      "subcategoria": "postgresql",
+      "nome": "PostgreSQL — SELECT utilizador/perfil/sessões (10 iterações)",
+      "passou": true,
+      "detalhes": "User P50=0.3ms | Perfil P50=0.4ms | Sessões P50=0.3ms",
+      "latencia_ms": null,
+      "metricas": {
+        "user": {
+          "nome": "SELECT utilizador",
+          "p50_ms": 0.3,
+          "p95_ms": 15.8,
+          "media_ms": 1.9,
+          "max_ms": 15.8,
+          "min_ms": 0.3,
+          "n_amostras": 10,
+          "valores": [
+            15.8,
+            0.4,
+            0.3,
+            0.4,
+            0.6,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ]
+        },
+        "perfil": {
+          "nome": "SELECT perfil",
+          "p50_ms": 0.4,
+          "p95_ms": 3.7,
+          "media_ms": 0.7,
+          "max_ms": 3.7,
+          "min_ms": 0.3,
+          "n_amostras": 10,
+          "valores": [
+            3.7,
+            0.4,
+            0.6,
+            0.4,
+            0.6,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ]
+        },
+        "sessoes": {
+          "nome": "SELECT sessões",
+          "p50_ms": 0.3,
+          "p95_ms": 1.4,
+          "media_ms": 0.5,
+          "max_ms": 1.4,
+          "min_ms": 0.3,
+          "n_amostras": 10,
+          "valores": [
+            1.4,
+            0.4,
+            0.4,
+            0.5,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3,
+            0.3
+          ]
+        }
+      }
+    },
+    {
+      "id": "TD-07-curto",
+      "categoria": "desempenho",
+      "subcategoria": "tts",
+      "nome": "TTS Edge-TTS — texto curto (3 palavras)",
+      "passou": true,
+      "detalhes": "P50=813.2ms | Áudio=11.7 KB",
+      "latencia_ms": null,
+      "metricas": {
+        "nome": "TTS curto",
+        "p50_ms": 813.2,
+        "p95_ms": 1194.3,
+        "media_ms": 813.2,
+        "max_ms": 1194.3,
+        "min_ms": 432.1,
+        "n_amostras": 2,
+        "valores": [
+          1194.3,
+          432.1
+        ],
+        "tamanho_medio_kb": 11.7,
+        "n_palavras": 3
+      }
+    },
+    {
+      "id": "TD-07-medio",
+      "categoria": "desempenho",
+      "subcategoria": "tts",
+      "nome": "TTS Edge-TTS — texto medio (21 palavras)",
+      "passou": true,
+      "detalhes": "P50=1433.4ms | Áudio=43.5 KB",
+      "latencia_ms": null,
+      "metricas": {
+        "nome": "TTS medio",
+        "p50_ms": 1433.4,
+        "p95_ms": 2419.5,
+        "media_ms": 1433.4,
+        "max_ms": 2419.5,
+        "min_ms": 447.2,
+        "n_amostras": 2,
+        "valores": [
+          2419.5,
+          447.2
+        ],
+        "tamanho_medio_kb": 43.5,
+        "n_palavras": 21
+      }
+    },
+    {
+      "id": "TD-07-longo",
+      "categoria": "desempenho",
+      "subcategoria": "tts",
+      "nome": "TTS Edge-TTS — texto longo (65 palavras)",
+      "passou": true,
+      "detalhes": "P50=7783.1ms | Áudio=130.1 KB",
+      "latencia_ms": null,
+      "metricas": {
+        "nome": "TTS longo",
+        "p50_ms": 7783.1,
+        "p95_ms": 9639.9,
+        "media_ms": 7783.1,
+        "max_ms": 9639.9,
+        "min_ms": 5926.4,
+        "n_amostras": 2,
+        "valores": [
+          5926.4,
+          9639.9
+        ],
+        "tamanho_medio_kb": 130.1,
+        "n_palavras": 65
+      }
+    },
+    {
+      "id": "TD-08",
+      "categoria": "desempenho",
+      "subcategoria": "artefactos",
+      "nome": "Geração Timeline HTML — 3 iterações",
+      "passou": true,
+      "detalhes": "P50=45.5ms | P95=46.5ms | Max=46.5ms",
+      "latencia_ms": null,
+      "metricas": {
+        "nome": "Timeline HTML",
+        "p50_ms": 45.5,
+        "p95_ms": 46.5,
+        "media_ms": 33.7,
+        "max_ms": 46.5,
+        "min_ms": 9.0,
+        "n_amostras": 3,
+        "valores": [
+          9.0,
+          45.5,
+          46.5
+        ]
+      }
+    }
+  ],
+  "metricas_desempenho": {
+    "health_check": {
+      "nome": "Health Check",
+      "p50_ms": 42.9,
+      "p95_ms": 43.8,
+      "media_ms": 43.0,
+      "max_ms": 43.8,
+      "min_ms": 42.3,
+      "n_amostras": 5,
+      "valores": [
+        43.8,
+        42.9,
+        42.7,
+        42.3,
+        43.3
+      ]
+    },
+    "login": {
+      "nome": "Login (bcrypt)",
+      "p50_ms": 245.2,
+      "p95_ms": 271.4,
+      "media_ms": 252.8,
+      "max_ms": 271.4,
+      "min_ms": 234.4,
+      "n_amostras": 5,
+      "valores": [
+        271.4,
+        245.2,
+        242.8,
+        270.0,
+        234.4
+      ]
+    },
+    "get_me": {
+      "nome": "GET /me",
+      "p50_ms": 43.1,
+      "p95_ms": 44.6,
+      "media_ms": 43.5,
+      "max_ms": 44.6,
+      "min_ms": 42.6,
+      "n_amostras": 5,
+      "valores": [
+        42.6,
+        44.3,
+        44.6,
+        43.0,
+        43.1
+      ]
+    },
+    "chat_personalizado": {
+      "nome": "Chat Personalizado (Groq)",
+      "p50_ms": 333.0,
+      "p95_ms": 532.3,
+      "media_ms": 383.7,
+      "max_ms": 532.3,
+      "min_ms": 285.8,
+      "n_amostras": 3,
+      "valores": [
+        333.0,
+        532.3,
+        285.8
+      ],
+      "ttft_medio": 365.0
+    },
+    "redis_write": {
+      "nome": "Redis SETEX",
+      "p50_ms": 0.1,
+      "p95_ms": 0.8,
+      "media_ms": 0.2,
+      "max_ms": 0.8,
+      "min_ms": 0.1,
+      "n_amostras": 10,
+      "valores": [
+        0.8,
+        0.1,
+        0.2,
+        0.2,
+        0.2,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1
+      ]
+    },
+    "redis_read": {
+      "nome": "Redis GET",
+      "p50_ms": 0.1,
+      "p95_ms": 0.2,
+      "media_ms": 0.1,
+      "max_ms": 0.2,
+      "min_ms": 0.1,
+      "n_amostras": 10,
+      "valores": [
+        0.2,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1
+      ]
+    },
+    "redis_delete": {
+      "nome": "Redis DEL",
+      "p50_ms": 0.1,
+      "p95_ms": 0.2,
+      "media_ms": 0.1,
+      "max_ms": 0.2,
+      "min_ms": 0.1,
+      "n_amostras": 10,
+      "valores": [
+        0.2,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1,
+        0.1
+      ]
+    },
+    "pg_user": {
+      "nome": "SELECT utilizador",
+      "p50_ms": 0.3,
+      "p95_ms": 15.8,
+      "media_ms": 1.9,
+      "max_ms": 15.8,
+      "min_ms": 0.3,
+      "n_amostras": 10,
+      "valores": [
+        15.8,
+        0.4,
+        0.3,
+        0.4,
+        0.6,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3
+      ]
+    },
+    "pg_perfil": {
+      "nome": "SELECT perfil",
+      "p50_ms": 0.4,
+      "p95_ms": 3.7,
+      "media_ms": 0.7,
+      "max_ms": 3.7,
+      "min_ms": 0.3,
+      "n_amostras": 10,
+      "valores": [
+        3.7,
+        0.4,
+        0.6,
+        0.4,
+        0.6,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3
+      ]
+    },
+    "pg_sessoes": {
+      "nome": "SELECT sessões",
+      "p50_ms": 0.3,
+      "p95_ms": 1.4,
+      "media_ms": 0.5,
+      "max_ms": 1.4,
+      "min_ms": 0.3,
+      "n_amostras": 10,
+      "valores": [
+        1.4,
+        0.4,
+        0.4,
+        0.5,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3
+      ]
+    },
+    "tts_curto": {
+      "nome": "TTS curto",
+      "p50_ms": 813.2,
+      "p95_ms": 1194.3,
+      "media_ms": 813.2,
+      "max_ms": 1194.3,
+      "min_ms": 432.1,
+      "n_amostras": 2,
+      "valores": [
+        1194.3,
+        432.1
+      ],
+      "tamanho_medio_kb": 11.7,
+      "n_palavras": 3
+    },
+    "tts_medio": {
+      "nome": "TTS medio",
+      "p50_ms": 1433.4,
+      "p95_ms": 2419.5,
+      "media_ms": 1433.4,
+      "max_ms": 2419.5,
+      "min_ms": 447.2,
+      "n_amostras": 2,
+      "valores": [
+        2419.5,
+        447.2
+      ],
+      "tamanho_medio_kb": 43.5,
+      "n_palavras": 21
+    },
+    "tts_longo": {
+      "nome": "TTS longo",
+      "p50_ms": 7783.1,
+      "p95_ms": 9639.9,
+      "media_ms": 7783.1,
+      "max_ms": 9639.9,
+      "min_ms": 5926.4,
+      "n_amostras": 2,
+      "valores": [
+        5926.4,
+        9639.9
+      ],
+      "tamanho_medio_kb": 130.1,
+      "n_palavras": 65
+    },
+    "timeline": {
+      "nome": "Timeline HTML",
+      "p50_ms": 45.5,
+      "p95_ms": 46.5,
+      "media_ms": 33.7,
+      "max_ms": 46.5,
+      "min_ms": 9.0,
+      "n_amostras": 3,
+      "valores": [
+        9.0,
+        45.5,
+        46.5
+      ]
+    }
+  }
+}

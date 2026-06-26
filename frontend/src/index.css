@@ -405,8 +405,8 @@ body {
   position: relative;
   padding: 1.5rem;
   overflow: hidden;
-  flex: 0 0 58%; /* Bloqueia rigorosamente a 58% de altura no telemóvel para não encolher */
-  height: 58%;
+  flex: 0 0 45%; /* Reduzido de 58% para libertar espaço para o chat */
+  height: 45%;
 }
 
 @media(min-width: 768px) {
