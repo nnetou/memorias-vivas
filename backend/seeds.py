@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.core.config import settings
 from app.models.utilizador import (
-    Consentimento, PerfilBiografico, RoleEnum, Utilizador,
+    Consentimento, PerfilBiografico, RoleEnum, Utilizador, Sessao
 )
 from app.services.auth_service import hash_password
 
@@ -74,16 +74,59 @@ UTILIZADORES = [
             "memoria_marcante": "O dia em que o filho João nasceu.",
             "linha_temporal": [
                 {"periodo": "10 anos", "acontecimento": "Começou a ajudar o pai na oficina de carpintaria em Évora."},
-                {"periodo": "25 anos", "acontecimento": "Casou-se com a sua esposa Maria."},
+                {"periodo": "18 anos", "acontecimento": "Ganhou o seu primeiro ordenado a sério e comprou uma bicicleta."},
+                {"periodo": "21 anos", "acontecimento": "Foi chamado para a tropa e esteve destacado nos Açores."},
+                {"periodo": "25 anos", "acontecimento": "Casou-se com a sua esposa Maria na Sé de Évora."},
                 {"periodo": "28 anos", "acontecimento": "Nascimento do seu primeiro filho, o João."},
                 {"periodo": "31 anos", "acontecimento": "Nascimento da sua filha Ana."},
+                {"periodo": "45 anos", "acontecimento": "Abriu a sua própria oficina de carpintaria no centro da cidade."},
                 {"periodo": "65 anos", "acontecimento": "Reformou-se após 40 anos dedicados à arte da carpintaria."}
+            ],
+            "memorias": [
+                {
+                    "titulo": "A Primeira Bicicleta",
+                    "narrativa": "Manuel lembra-se com muita alegria do dia em que, aos 18 anos, juntou o seu primeiro ordenado para comprar uma bicicleta pasteleira preta. Com ela, começou a ir todos os dias de Évora até à aldeia vizinha para visitar a Maria, que mais tarde viria a ser sua esposa.",
+                    "pessoas_envolvidas": ["Manuel", "Maria"],
+                    "local": "Évora",
+                    "emocao": "Alegria",
+                    "idade_ou_data": "18 anos"
+                },
+                {
+                    "titulo": "O Tempo da Tropa nos Açores",
+                    "narrativa": "Aos 21 anos, Manuel foi destacado para os Açores. Sente muita saudade desse tempo, pois nunca tinha saído do Alentejo. O verde das ilhas e a camaradagem com os outros soldados deixaram uma marca profunda, embora sentisse falta da família.",
+                    "pessoas_envolvidas": ["Manuel", "Camaradas"],
+                    "local": "Açores",
+                    "emocao": "Saudade",
+                    "idade_ou_data": "21 anos"
+                },
+                {
+                    "titulo": "A Inauguração da Oficina",
+                    "narrativa": "Aos 45 anos, com a ajuda dos filhos João e Ana, Manuel abriu finalmente a sua própria oficina de carpintaria. O cheiro a serradura fresca e o orgulho de ver a placa com o seu nome na porta é algo que jamais esquecerá.",
+                    "pessoas_envolvidas": ["Manuel", "João", "Ana"],
+                    "local": "Centro de Évora",
+                    "emocao": "Orgulho",
+                    "idade_ou_data": "45 anos"
+                }
             ],
             "outros": {
                 "hobbies":      "Caminhadas pela Ribeira, jardinagem.",
                 "curiosidade":  "A filha Ana começou a aprender marcenaria.",
             },
         },
+        "sessoes": [
+            {
+                "tema": "memorias",
+                "resumo": "O Sr. Manuel partilhou a sua história de juventude, revelando que aos 18 anos comprou a sua primeira bicicleta com o seu primeiro ordenado. Contou com muito entusiasmo que usava a bicicleta para ir de Évora até à aldeia vizinha, pedalando quilómetros apenas para ver a Maria, com quem viria a casar."
+            },
+            {
+                "tema": "familia",
+                "resumo": "Durante a conversa sobre família, o Manuel recordou com muito orgulho o dia em que abriu a sua própria carpintaria, já com 45 anos. Mencionou que os filhos, João e Ana, estiveram presentes e o ajudaram a montar tudo, sendo este um dos momentos de maior união familiar da sua vida."
+            },
+            {
+                "tema": "saude",
+                "resumo": "O Manuel falou sobre o seu tempo de juventude nos Açores, aos 21 anos, durante a tropa. Disse que o ar puro e as caminhadas pelas ilhas lhe deram uma saúde de ferro. Sente saudades do verde intenso da paisagem, um contraste enorme com o Alentejo onde nasceu."
+            }
+        ]
     },
 ]
 
@@ -178,6 +221,16 @@ async def seed() -> None:
                 autoriza_geracao_video=False,
             )
             db.add(consentimento)
+
+            # Criar sessões
+            if "sessoes" in dados:
+                for idx, s in enumerate(dados["sessoes"]):
+                    sessao = Sessao(
+                        utilizador_id=utilizador.id,
+                        tema=s["tema"],
+                        resumo_sessao=s["resumo"],
+                    )
+                    db.add(sessao)
 
             logger.info("✅ Criado: %s (%s)", dados["email"], dados["role"].value)
             criados += 1

@@ -567,7 +567,7 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
       if (msg.type === "erro")           { setErro(msg.mensagem); setMicEstado("idle"); }
     };
 
-    ws.onerror = () => setErro("Erro de ligação ao servidor.");
+    ws.onerror = (e) => console.warn("WebSocket aviso:", e);
     ws.onclose = () => setMicEstado("idle");
 
     return () => ws.close();
@@ -828,7 +828,7 @@ function EcraConversa({ tema, onVoltar, onEncerrada }) {
           {/* Erro */}
           {erro && (
             <div style={{
-              margin: "0 1rem 0.5rem",
+              margin: "1rem 1rem 0.5rem",
               padding: "0.875rem 1.25rem",
               background: "#fef2f2",
               border: "1px solid #fca5a5",
