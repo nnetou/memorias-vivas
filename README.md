@@ -9,7 +9,7 @@
 
 **Final project for the BSc in Computer Engineering — grade: 19/20.**
 
-[Watch Demo Video](https://example.com/replace-with-demo) · [Academic Poster (PDF)](https://example.com/replace-with-poster.pdf) · [API Docs (/docs)](http://localhost:8000/docs)
+[Watch Demo Video](https://drive.google.com/file/d/1YUTOP9yv_d8fIdMNU1TELAejPeq0z3Po/view?usp=sharing)
 
 ## Overview
 
